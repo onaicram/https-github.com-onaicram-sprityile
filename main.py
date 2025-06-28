@@ -3,7 +3,7 @@ from PyQt5.QtWidgets import (
     QApplication, QGraphicsView, QGraphicsScene, QGraphicsPixmapItem,
     QFileDialog, QMainWindow, QWidget, QPushButton, QVBoxLayout, QLabel, QLineEdit, QHBoxLayout, QMessageBox
 )
-from PyQt5.QtGui import QPixmap, QPainter, QColor, QImage, QBrush
+from PyQt5.QtGui import QPixmap, QPainter, QColor, QImage, QPen
 from PyQt5.QtCore import Qt, QRectF, pyqtSignal
 
 
@@ -16,25 +16,7 @@ class ImageViewer(QGraphicsView):
         self.pixmap_item = None
         self.setRenderHint(QPainter.Antialiasing)
         self.setTransformationAnchor(QGraphicsView.AnchorUnderMouse)
-        self.setBackgroundBrush(QBrush(Qt.lightGray))
-     
-    def drawBackground(self, painter, rect):
-        tile_size = 16
-        color1 = QColor(220, 220, 220)
-        color2 = QColor(255, 255, 255)
-
-        left = int(rect.left())
-        top = int(rect.top())
-        right = int(rect.right())
-        bottom = int(rect.bottom())
-
-        for y in range(top, bottom, tile_size):
-            for x in range(left, right, tile_size):
-                if ((x // tile_size) + (y // tile_size)) % 2 == 0:
-                    painter.fillRect(x, y, tile_size, tile_size, color1)
-                else:
-                    painter.fillRect(x, y, tile_size, tile_size, color2)
-
+        self.setBackgroundBrush(QColor(220, 220, 220))  # Grigio chiaro uniforme
 
     color_picked = pyqtSignal(str)
     def mousePressEvent(self, event):
@@ -66,21 +48,23 @@ class ImageViewer(QGraphicsView):
         super().mouseReleaseEvent(event)
 
 
-    def load_image(self, image_path):
+    def load_image(self, image_path, tile_size=16):
         pixmap = QPixmap(image_path)
         if pixmap.isNull():
             print("Errore: immagine non valida")
             return
 
         self.scene.clear()
-
         self.pixmap_item = QGraphicsPixmapItem(pixmap)
+        self.pixmap_item.setZValue(1)  # Assicura che l'immagine sia sopra la griglia
         self.scene.addItem(self.pixmap_item)
+
+        self.draw_checkerboard(pixmap, tile_size)
 
         self.setSceneRect(QRectF(pixmap.rect()))
         self.resetTransform()
+        self.centerOn(self.pixmap_item)
         
-
         # Adatta la vista alle dimensioni
         view_width = self.viewport().width()
         view_height = self.viewport().height()
@@ -94,11 +78,59 @@ class ImageViewer(QGraphicsView):
         self.scale(scale, scale)
 
 
+    def draw_checkerboard(self, pixmap, checker_size=16):
+        
+        image_width, image_height = pixmap.width(), pixmap.height()
+        checkerboard = QPixmap(image_width, image_height)
+        checkerboard.fill(Qt.transparent)
+        painter = QPainter(checkerboard)
+        color1 = QColor(200, 200, 200)
+        color2 = QColor(255, 255, 255)
+
+        for y in range(0, image_height, checker_size):
+            for x in range(0, image_width, checker_size):
+                color = color1 if ((x // checker_size + y // checker_size) % 2 == 0) else color2
+                painter.fillRect(x, y, checker_size, checker_size, color)
+        painter.end()
+
+        checker_item = QGraphicsPixmapItem(checkerboard)
+        checker_item.setZValue(0)  # Assicura che il checkerboard sia sotto l'immagine
+        self.scene.addItem(checker_item)
+
+
     def wheelEvent(self, event):
         zoom_in_factor = 1.15
         zoom_out_factor = 1 / zoom_in_factor
         zoom = zoom_in_factor if event.angleDelta().y() > 0 else zoom_out_factor
         self.scale(zoom, zoom)
+
+
+    def draw_grid(self, tile_size=16):
+        if self.pixmap_item is None:
+            return
+        
+        for item in self.scene.items():
+            if hasattr(item, "is_grid_line") and item.is_grid_line:
+                self.scene.removeItem(item)
+
+        pixmap_rect = self.pixmap_item.pixmap().rect()
+        width = pixmap_rect.width()
+        height = pixmap_rect.height()
+
+        pen = QPen(QColor(255, 100, 0, 180))
+        pen.setWidthF(0.0)  # linea sottile e nitida
+
+        # Linee verticali
+        for x in range(0, width + 1, tile_size):
+            line = self.scene.addLine(x, 0, x, height, pen)
+            line.setZValue(10)
+            line.is_grid_line = True
+
+        # Linee orizzontali
+        for y in range(0, height + 1, tile_size):
+            line = self.scene.addLine(0, y, width, y, pen)
+            line.setZValue(10)
+            line.is_grid_line = True
 
 
 class MainWindow(QMainWindow):
@@ -111,28 +143,40 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("Sprityle")
 
         self.viewer = ImageViewer()
-        self.original_pixmap = None  # Per l'undo
-
+        self.original_pixmap = None  
         self.viewer.color_picked.connect(self.show_color)
 
-        self.load_button = QPushButton("Carica immagine")
-        self.load_button.setMaximumWidth(120)
-        self.load_button.clicked.connect(self.load_image)
-
+        # Color 
         self.color_label = QLabel("Colore selezionato:")
-        self.color_label.setFixedWidth(120)
+        self.color_label.setMaximumWidth(90)
 
         self.color_field = QLineEdit("Nessun colore")
         self.color_field.setFixedWidth(80)
         self.color_field.setReadOnly(True)
 
         self.copy_button = QPushButton("Copia")
-        self.copy_button.setFixedWidth(60)
+        self.copy_button.setFixedWidth(80)
         self.copy_button.clicked.connect(self.copy_color)
 
         self.remove_color_button = QPushButton("Rimuovi colore")
         self.remove_color_button.setFixedWidth(120)
         self.remove_color_button.clicked.connect(self.remove_selected_color)
+
+        color_layout = QHBoxLayout()
+        color_layout.addWidget(self.color_label)
+        color_layout.addWidget(self.color_field)
+        color_layout.addWidget(self.copy_button)
+        color_layout.addWidget(self.remove_color_button)
+        color_layout.setAlignment(Qt.AlignCenter)
+
+        layout = QVBoxLayout()
+        layout.addWidget(self.viewer)
+        layout.addLayout(color_layout)
+
+        # Buttons
+        self.load_button = QPushButton("Carica")
+        self.load_button.setMaximumWidth(120)
+        self.load_button.clicked.connect(self.load_image)
 
         self.save_button = QPushButton("Salva")
         self.save_button.setFixedWidth(80)
@@ -150,16 +194,6 @@ class MainWindow(QMainWindow):
         self.reset_button.setFixedWidth(80)
         self.reset_button.clicked.connect(self.reset_image)
 
-        color_layout = QHBoxLayout()
-        color_layout.addWidget(self.color_label)
-        color_layout.addWidget(self.color_field)
-        color_layout.addWidget(self.copy_button)
-        color_layout.addWidget(self.remove_color_button)
-
-        layout = QVBoxLayout()
-        layout.addWidget(self.viewer)
-        layout.addLayout(color_layout)
-
         button_layout = QHBoxLayout()
         button_layout.addWidget(self.load_button)
         button_layout.addWidget(self.save_button)
@@ -169,18 +203,47 @@ class MainWindow(QMainWindow):
         button_layout.setAlignment(Qt.AlignCenter)
         layout.addLayout(button_layout)
 
+        self.grid_button = QPushButton("Mostra griglia")
+        self.grid_button.setFixedWidth(100)
+        self.grid_button.clicked.connect(self.draw_grid_on_image)
+
+        self.grid_size_label = QLabel("Dimensione griglia:")
+        self.grid_size_label.setFixedWidth(100)
+
+        self.grid_size_field = QLineEdit("16")
+        self.grid_size_field.setFixedWidth(40)
+
+        grid_layout = QHBoxLayout()
+        grid_layout.addWidget(self.grid_size_label)
+        grid_layout.addWidget(self.grid_size_field)
+        grid_layout.addWidget(self.grid_button)
+        grid_layout.setAlignment(Qt.AlignCenter)
+        layout.addLayout(grid_layout)
+
         container = QWidget()
         container.setLayout(layout)
         self.setCentralWidget(container)
+
+
+    def draw_grid_on_image(self):
+        try:
+            tile_size = int(self.grid_size_field.text())
+        except ValueError:
+            QMessageBox.warning(self, "Errore", "Dimensione griglia non valida.")
+            return
+
+        self.viewer.draw_grid(tile_size)
+
 
     def remove_selected_color(self):
         if self.viewer.pixmap_item is None:
             return
         
-        image = self.viewer.pixmap_item.pixmap().toImage() 
+        original_pixmap = self.viewer.pixmap_item.pixmap()
+        image = original_pixmap.toImage().convertToFormat(QImage.Format_ARGB32) 
 
         color_hex = self.color_field.text()
-        if not color_hex or color_hex == "Nessun colore":
+        if not QColor.isValidColor(color_hex):
             return
 
         target_color = QColor(color_hex)
@@ -199,9 +262,17 @@ class MainWindow(QMainWindow):
     def load_image(self):
         file_path, _ = QFileDialog.getOpenFileName(self, "Apri immagine", "", "Immagini (*.png *.jpg *.bmp)")
         if file_path:
-            self.viewer.load_image(file_path)
+
+            try:
+                tile_size = int(self.grid_size_field.text())
+            except ValueError:
+                tile_size = 16  # fallback se campo vuoto o invalido
+        
+            self.viewer.load_image(file_path, tile_size)
+            self.original_pixmap = self.viewer.pixmap_item.pixmap().copy()
             self.undo_stack.clear()
             self.redo_stack.clear()
+            
             self.save_state()
 
     def save_image(self):
@@ -217,8 +288,17 @@ class MainWindow(QMainWindow):
 
     def reset_image(self):
         if self.original_pixmap and self.viewer.pixmap_item:
-            self.viewer.pixmap_item.setPixmap(self.original_pixmap)
+            # Ripristina l'immagine originale
+            self.viewer.pixmap_item.setPixmap(QPixmap(self.original_pixmap))
+
+            # Pulisce gli stack di undo e redo
+            self.undo_stack.clear()
+            self.redo_stack.clear()
+
+            # Aggiorna lo stato visivo e informa l'utente
+            self.color_field.setText("Nessun colore")
             QMessageBox.information(self, "Reset", "Immagine ripristinata.")
+
 
 
     def save_state(self):
