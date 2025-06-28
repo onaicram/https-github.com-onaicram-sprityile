@@ -11,14 +11,12 @@ class ImageViewer(QGraphicsView):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Sprityle")
-        self.background_item = None
         self.scene = QGraphicsScene(self)
         self.setScene(self.scene)
         self.pixmap_item = None
         self.setRenderHint(QPainter.Antialiasing)
         self.setTransformationAnchor(QGraphicsView.AnchorUnderMouse)
-        self.setBackgroundBrush(QBrush(Qt.transparent))
-
+        self.setBackgroundBrush(QBrush(Qt.lightGray))
      
     def drawBackground(self, painter, rect):
         tile_size = 16
@@ -78,9 +76,10 @@ class ImageViewer(QGraphicsView):
 
         self.pixmap_item = QGraphicsPixmapItem(pixmap)
         self.scene.addItem(self.pixmap_item)
-        self.setSceneRect(QRectF(pixmap.rect()))
 
+        self.setSceneRect(QRectF(pixmap.rect()))
         self.resetTransform()
+        
 
         # Adatta la vista alle dimensioni
         view_width = self.viewport().width()
@@ -90,7 +89,7 @@ class ImageViewer(QGraphicsView):
 
         scale_x = view_width / pixmap_width
         scale_y = view_height / pixmap_height
-        scale = min(scale_x, scale_y, 4.0)  
+        scale = min(scale_x, scale_y) * 0.9
 
         self.scale(scale, scale)
 
@@ -178,31 +177,32 @@ class MainWindow(QMainWindow):
         if self.viewer.pixmap_item is None:
             return
         
-        self.save_state()
+        image = self.viewer.pixmap_item.pixmap().toImage() 
 
-        img = self.viewer.pixmap_item.pixmap().toImage()
-        img = img.convertToFormat(QImage.Format_ARGB32_Premultiplied)
-
-        color_text = self.color_field.text()
-        if not QColor.isValidColor(color_text):
-            QMessageBox.warning(self, "Errore", "Colore non valido selezionato.")
+        color_hex = self.color_field.text()
+        if not color_hex or color_hex == "Nessun colore":
             return
-        target_color = QColor(color_text).rgb()
 
-        for y in range(img.height()):
-            for x in range(img.width()):
-                if img.pixelColor(x, y) == target_color:
-                    img.setPixelColor(x, y, QColor(0, 0, 0, 0))  # Trasparente
+        target_color = QColor(color_hex)
+        changed = False
+        
+        for y in range(image.height()):
+            for x in range(image.width()):
+                if image.pixelColor(x, y) == target_color:
+                    image.setPixelColor(x, y, QColor(0, 0, 0, 0))
+                    changed = True
 
-        new_pixmap = QPixmap.fromImage(img)
-        self.viewer.pixmap_item.setPixmap(new_pixmap)
+        if changed:
+            self.viewer.pixmap_item.setPixmap(QPixmap.fromImage(image))
+            self.save_state()
 
     def load_image(self):
         file_path, _ = QFileDialog.getOpenFileName(self, "Apri immagine", "", "Immagini (*.png *.jpg *.bmp)")
         if file_path:
             self.viewer.load_image(file_path)
-            pixmap = QPixmap(file_path)
-            self.original_pixmap = pixmap.copy()  # Salva l'immagine originale per l'undo
+            self.undo_stack.clear()
+            self.redo_stack.clear()
+            self.save_state()
 
     def save_image(self):
         if self.viewer.pixmap_item is None:
@@ -220,33 +220,25 @@ class MainWindow(QMainWindow):
             self.viewer.pixmap_item.setPixmap(self.original_pixmap)
             QMessageBox.information(self, "Reset", "Immagine ripristinata.")
 
-    def undo(self):
-        if not self.undo_stack:
-            return
-        current = self.viewer.pixmap_item.pixmap().toImage().copy()
-        self.redo_stack.append(current)
-
-        prev = self.undo_stack.pop()
-        self.viewer.pixmap_item.setPixmap(QPixmap.fromImage(prev))
-
-    def redo(self):
-        if not self.redo_stack:
-            return
-
-        current = self.viewer.pixmap_item.pixmap().toImage().copy()
-        self.undo_stack.append(current)
-
-        # Poi applichiamo l'immagine successiva
-        next_image = self.redo_stack.pop()
-        self.viewer.pixmap_item.setPixmap(QPixmap.fromImage(next_image))
-
-
 
     def save_state(self):
         if self.viewer.pixmap_item:
-            image = self.viewer.pixmap_item.pixmap().toImage().copy()
-            self.undo_stack.append(image)
+            pixmap = self.viewer.pixmap_item.pixmap().copy()
+            self.undo_stack.append(pixmap)
             self.redo_stack.clear()
+
+    def undo(self):
+        if len(self.undo_stack) > 1:
+            current = self.undo_stack.pop()
+            self.redo_stack.append(current)
+            prev = self.undo_stack[-1]
+            self.viewer.pixmap_item.setPixmap(prev)
+
+    def redo(self):
+        if self.redo_stack:
+            next_state = self.redo_stack.pop()
+            self.undo_stack.append(next_state)
+            self.viewer.pixmap_item.setPixmap(next_state)
 
 
     def show_color(self, hex_color):
