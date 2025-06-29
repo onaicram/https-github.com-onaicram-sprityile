@@ -3,8 +3,10 @@ from PyQt5.QtWidgets import (
     QApplication, QGraphicsView, QGraphicsScene, QGraphicsPixmapItem,
     QFileDialog, QMainWindow, QWidget, QPushButton, QVBoxLayout, QLabel, QLineEdit, QHBoxLayout, QMessageBox
 )
-from PyQt5.QtGui import QPixmap, QPainter, QColor, QImage, QPen
+from PyQt5.QtGui import QPixmap, QPainter, QColor, QImage
 from PyQt5.QtCore import Qt, QRectF, pyqtSignal
+
+from tile_splitter import TileSplitterWindow
 
 
 class ImageViewer(QGraphicsView):
@@ -106,42 +108,13 @@ class ImageViewer(QGraphicsView):
         self.scale(zoom, zoom)
 
 
-    def draw_grid(self, tile_size=16):
-        if self.pixmap_item is None:
-            return
-        
-        if hasattr(self, "grid_items"):
-            for item in self.grid_items:
-                self.scene.removeItem(item)
-        self.grid_items = []
-
-
-        pixmap_rect = self.pixmap_item.pixmap().rect()
-        width = pixmap_rect.width()
-        height = pixmap_rect.height()
-
-        pen = QPen(QColor(255, 100, 0, 255))
-        pen.setWidthF(0.0)  # linea sottile e nitida
-
-        # Linee verticali
-        for x in range(0, width + 1, tile_size):
-            line = self.scene.addLine(x, 0, x, height, pen)
-            line.setZValue(10)
-            self.grid_items.append(line)
-
-        # Linee orizzontali
-        for y in range(0, height + 1, tile_size):
-            line = self.scene.addLine(0, y, width, y, pen)
-            line.setZValue(10)
-            self.grid_items.append(line)
-
-
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
 
         self.undo_stack = []
         self.redo_stack = []
+        self.current_tile_size = 16  # Dimensione predefinita dei tasselli
 
         self.setWindowTitle("Sprityle")
 
@@ -197,53 +170,34 @@ class MainWindow(QMainWindow):
         self.reset_button.setFixedWidth(80)
         self.reset_button.clicked.connect(self.reset_image)
 
+        self.tile_splitter_button = QPushButton("Gestisci tasselli")
+        self.tile_splitter_button.setFixedWidth(120)
+        self.tile_splitter_button.clicked.connect(self.open_tile_splitter)
+
         button_layout = QHBoxLayout()
         button_layout.addWidget(self.load_button)
         button_layout.addWidget(self.save_button)
         button_layout.addWidget(self.undo_button)
         button_layout.addWidget(self.redo_button)
         button_layout.addWidget(self.reset_button)
+        button_layout.addWidget(self.tile_splitter_button)
         button_layout.setAlignment(Qt.AlignCenter)
         layout.addLayout(button_layout)
-
-        self.grid_button = QPushButton("Mostra griglia")
-        self.grid_button.setFixedWidth(100)
-        self.grid_button.clicked.connect(self.draw_grid_on_image)
-
-        self.grid_size_label = QLabel("Dimensione griglia:")
-        self.grid_size_label.setFixedWidth(100)
-
-        self.grid_size_field = QLineEdit("16")
-        self.grid_size_field.setFixedWidth(40)
-
-        grid_layout = QHBoxLayout()
-        grid_layout.addWidget(self.grid_size_label)
-        grid_layout.addWidget(self.grid_size_field)
-        grid_layout.addWidget(self.grid_button)
-        grid_layout.setAlignment(Qt.AlignCenter)
-        layout.addLayout(grid_layout)
-
+        
         container = QWidget()
         container.setLayout(layout)
         self.setCentralWidget(container)
 
 
-    def draw_grid_on_image(self):
-        try:
-            tile_size = int(self.grid_size_field.text())
-        except ValueError:
-            QMessageBox.warning(self, "Errore", "Dimensione griglia non valida.")
+    def open_tile_splitter(self):
+        if self.viewer.pixmap_item is None:
+            QMessageBox.warning(self, "Errore", "Nessuna immagine caricata.")
             return
 
-        # Rimuovi il checkerboard precedente se esiste
-        if hasattr(self.viewer, "checker_item") and self.viewer.checker_item:
-            self.viewer.scene.removeItem(self.viewer.checker_item)
-        
-        # Ricrea il checkerboard aggiornato
-        if self.viewer.pixmap_item:
-            pixmap = self.viewer.pixmap_item.pixmap()
-            self.viewer.checker_item = self.viewer.draw_checkerboard(pixmap, tile_size)
-            self.viewer.draw_grid(tile_size)
+        pixmap = self.viewer.pixmap_item.pixmap().copy()
+
+        self.tile_splitter = TileSplitterWindow(pixmap)
+        self.tile_splitter.show()
 
 
     def remove_selected_color(self):
@@ -274,11 +228,8 @@ class MainWindow(QMainWindow):
         file_path, _ = QFileDialog.getOpenFileName(self, "Apri immagine", "", "Immagini (*.png *.jpg *.bmp)")
         if file_path:
 
-            try:
-                tile_size = int(self.grid_size_field.text())
-            except ValueError:
-                tile_size = 16  # fallback se campo vuoto o invalido
-        
+            tile_size = int(self.current_tile_size)
+            
             self.viewer.load_image(file_path, tile_size)
             self.original_pixmap = self.viewer.pixmap_item.pixmap().copy()
             self.undo_stack.clear()
