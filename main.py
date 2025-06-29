@@ -17,6 +17,7 @@ class ImageViewer(QGraphicsView):
         self.setRenderHint(QPainter.Antialiasing)
         self.setTransformationAnchor(QGraphicsView.AnchorUnderMouse)
         self.setBackgroundBrush(QColor(220, 220, 220))  # Grigio chiaro uniforme
+        self.checker_item = None
 
     color_picked = pyqtSignal(str)
     def mousePressEvent(self, event):
@@ -109,28 +110,30 @@ class ImageViewer(QGraphicsView):
         if self.pixmap_item is None:
             return
         
-        for item in self.scene.items():
-            if hasattr(item, "is_grid_line") and item.is_grid_line:
+        if hasattr(self, "grid_items"):
+            for item in self.grid_items:
                 self.scene.removeItem(item)
+        self.grid_items = []
+
 
         pixmap_rect = self.pixmap_item.pixmap().rect()
         width = pixmap_rect.width()
         height = pixmap_rect.height()
 
-        pen = QPen(QColor(255, 100, 0, 180))
+        pen = QPen(QColor(255, 100, 0, 255))
         pen.setWidthF(0.0)  # linea sottile e nitida
 
         # Linee verticali
         for x in range(0, width + 1, tile_size):
             line = self.scene.addLine(x, 0, x, height, pen)
             line.setZValue(10)
-            line.is_grid_line = True
+            self.grid_items.append(line)
 
         # Linee orizzontali
         for y in range(0, height + 1, tile_size):
             line = self.scene.addLine(0, y, width, y, pen)
             line.setZValue(10)
-            line.is_grid_line = True
+            self.grid_items.append(line)
 
 
 class MainWindow(QMainWindow):
@@ -232,7 +235,15 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, "Errore", "Dimensione griglia non valida.")
             return
 
-        self.viewer.draw_grid(tile_size)
+        # Rimuovi il checkerboard precedente se esiste
+        if hasattr(self.viewer, "checker_item") and self.viewer.checker_item:
+            self.viewer.scene.removeItem(self.viewer.checker_item)
+        
+        # Ricrea il checkerboard aggiornato
+        if self.viewer.pixmap_item:
+            pixmap = self.viewer.pixmap_item.pixmap()
+            self.viewer.checker_item = self.viewer.draw_checkerboard(pixmap, tile_size)
+            self.viewer.draw_grid(tile_size)
 
 
     def remove_selected_color(self):
