@@ -1,6 +1,6 @@
 from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QGraphicsScene, QLineEdit, QGraphicsView,
-                             QHBoxLayout, QPushButton, QLabel, QGraphicsPixmapItem, QMessageBox)
-from PyQt5.QtGui import QPixmap, QPainter, QColor, QPen 
+                             QHBoxLayout, QPushButton, QLabel, QGraphicsPixmapItem, QMessageBox, QGraphicsRectItem)
+from PyQt5.QtGui import QPixmap, QPainter, QColor, QPen, QBrush
 from PyQt5.QtCore import Qt, QRectF
 
 
@@ -28,7 +28,10 @@ class TileSplitterWindow(QWidget):
         self.grid_size_field.setFixedWidth(40)
         grid_label = QLabel("Dimensione griglia:")
         grid_label.setFixedWidth(100)
-        self.grid_button = QPushButton("Mostra griglia")
+        
+        self.grid_button = QPushButton("Attiva griglia")
+        self.grid_button.setCheckable(True)
+        self.grid_button.setChecked(False)
         self.grid_button.setFixedWidth(100)
         self.grid_button.clicked.connect(self.draw_grid)
 
@@ -64,12 +67,22 @@ class TileSplitterWindow(QWidget):
     def draw_grid(self):
         try:
             tile_size = int(self.grid_size_field.text())
+            self.tile_size = tile_size
+            self.viewer.set_tile_size(tile_size)
         except ValueError:
             QMessageBox.warning(self, "Errore", "Dimensione griglia non valida.")
             return
-
+        
         self.viewer.draw_checkerboard(tile_size)
-        self.viewer.draw_grid(tile_size)
+
+        if self.grid_button.isChecked():
+            self.grid_button.setText("Disattiva griglia")
+            self.viewer.grid_visible = True
+            self.viewer.draw_grid(tile_size)
+        else:
+            self.grid_button.setText("Attiva griglia")
+            self.viewer.grid_visible = False
+            self.viewer.clear_grid()
 
 
 class GridGraphicsView(QGraphicsView):
@@ -80,6 +93,10 @@ class GridGraphicsView(QGraphicsView):
         self.setBackgroundBrush(QColor(220, 220, 220))
         self.setDragMode(QGraphicsView.NoDrag)
         self.pixmap_item = None
+        self.tile_size = 16
+        self.selected_tiles = []
+        self.selected_coords = set()
+        self.grid_visible = False
 
     def draw_checkerboard(self, tile_size=16):
         if self.pixmap_item is None:
@@ -108,11 +125,65 @@ class GridGraphicsView(QGraphicsView):
         self.checker_item.setZValue(0)
         self.scene().addItem(self.checker_item)
 
+    def clear_grid(self):
+        if hasattr(self, "grid_items"):
+            for item in self.grid_items:
+                self.scene().removeItem(item)
+            self.grid_items.clear()
+
 
     def mousePressEvent(self, event):
-        if event.button() == Qt.LeftButton:
-            self.setDragMode(QGraphicsView.ScrollHandDrag)
+        if self.grid_visible:
+            if event.button() == Qt.LeftButton:
+                if event.modifiers() & Qt.ControlModifier:
+                    # Ctrl premuto → pan
+                    self.setDragMode(QGraphicsView.ScrollHandDrag)
+                else:    
+                    pos = self.mapToScene(event.pos())
+                    x = int(pos.x() // self.tile_size)
+                    y = int(pos.y() // self.tile_size)
+
+                    # BLOCCO: evita selezione fuori immagine
+                    if not self.pixmap_item.pixmap().rect().contains(int(pos.x()), int(pos.y())):
+                        return
+                    
+                    coord = (x, y)
+
+                    if coord in self.selected_coords:
+                        # Deseleziona
+                        self.selected_coords.remove(coord)
+                        self._remove_tile_marker(coord)
+                    else:
+                        # Seleziona
+                        self.selected_coords.add(coord)
+                        self._highlight_tile(coord)         
+        else:
+            if event.button() == Qt.LeftButton:
+                self.setDragMode(QGraphicsView.ScrollHandDrag)
+                
         super().mousePressEvent(event)
+
+
+    def _highlight_tile(self, coord):
+        x, y = coord
+        rect = QRectF(x * self.tile_size, y * self.tile_size, self.tile_size, self.tile_size)
+        
+        item = self.scene().addRect(rect, QPen(Qt.NoPen), QColor(255, 165, 0, 150))  # Arancione tenue
+        item.setZValue(9)  # Sotto le linee della griglia (che stanno a 10)
+        
+        if not hasattr(self, "tile_markers"):
+            self.tile_markers = {}
+        self.tile_markers[coord] = item
+
+    def _remove_tile_marker(self, coord):
+        if hasattr(self, "tile_markers") and coord in self.tile_markers:
+            self.scene().removeItem(self.tile_markers[coord])
+            del self.tile_markers[coord]
+
+
+   
+    def set_tile_size(self, size):
+        self.tile_size = size
 
     def mouseMoveEvent(self, event):
         if self.dragMode() == QGraphicsView.ScrollHandDrag:
@@ -120,8 +191,9 @@ class GridGraphicsView(QGraphicsView):
         super().mouseMoveEvent(event)
 
     def mouseReleaseEvent(self, event):
-        self.setDragMode(QGraphicsView.NoDrag)
-        self.setCursor(Qt.ArrowCursor)
+        if event.button() in (Qt.LeftButton, Qt.RightButton):
+            self.setDragMode(QGraphicsView.NoDrag)
+            self.viewport().setCursor(Qt.ArrowCursor)
         super().mouseReleaseEvent(event)
 
     def wheelEvent(self, event):
@@ -131,6 +203,7 @@ class GridGraphicsView(QGraphicsView):
         self.scale(zoom, zoom)
 
     def draw_grid(self, tile_size=16):
+        self.grid_visible = True
         scene = self.scene()
         if self.pixmap_item is None:
             return
