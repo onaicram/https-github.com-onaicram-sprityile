@@ -2,6 +2,7 @@ from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QGraphicsScene, QLineEdit, QG
                              QHBoxLayout, QPushButton, QLabel, QGraphicsPixmapItem, QMessageBox, QGraphicsRectItem)
 from PyQt5.QtGui import QPixmap, QPainter, QColor, QPen, QBrush
 from PyQt5.QtCore import Qt, QRectF
+from tile_splitter_widget import TileSplitterWidget
 
 
 class TileSplitterWindow(QWidget):
@@ -17,7 +18,7 @@ class TileSplitterWindow(QWidget):
         self.viewer.setSceneRect(QRectF(self.source_pixmap.rect()))
         self.viewer.centerOn(self.viewer.pixmap_item)
         self.viewer.resetTransform()
-        self.resize(900, 700)  
+        self.resize(800, 600)  
         self.tile_size = 16
         self.init_ui()
 
@@ -35,10 +36,15 @@ class TileSplitterWindow(QWidget):
         self.grid_button.setFixedWidth(100)
         self.grid_button.clicked.connect(self.draw_grid)
 
+        self.separator_button = QPushButton("Avvia separazione")
+        self.separator_button.setFixedWidth(100)
+        self.separator_button.clicked.connect(self.open_separator)
+
         grid_layout = QHBoxLayout()
         grid_layout.addWidget(grid_label)
         grid_layout.addWidget(self.grid_size_field)
         grid_layout.addWidget(self.grid_button)
+        grid_layout.addWidget(self.separator_button)
         grid_layout.setAlignment(Qt.AlignCenter)
 
         # Layout complessivo
@@ -83,6 +89,26 @@ class TileSplitterWindow(QWidget):
             self.grid_button.setText("Attiva griglia")
             self.viewer.grid_visible = False
             self.viewer.clear_grid()
+
+    def open_separator(self):
+        if not hasattr(self.viewer, "selected_coords") or not self.viewer.selected_coords:
+            QMessageBox.warning(self, "Errore", "Nessun tassello selezionato.")
+            return
+
+        try:
+            tile_size = int(self.grid_size_field.text())
+        except ValueError:
+            QMessageBox.warning(self, "Errore", "Dimensione griglia non valida.")
+            return
+
+        # Salviamo l'istanza come attributo per evitare che venga distrutta
+        self.separator_window = TileSplitterWidget(
+            source_pixmap=self.source_pixmap,
+            selected_coords=self.viewer.selected_coords,
+            tile_size=tile_size
+        )
+        self.separator_window.show()
+
 
 
 class GridGraphicsView(QGraphicsView):

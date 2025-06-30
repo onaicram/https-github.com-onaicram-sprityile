@@ -122,6 +122,14 @@ class MainWindow(QMainWindow):
         self.original_pixmap = None  
         self.viewer.color_picked.connect(self.show_color)
 
+        self.tile_splitter_button = QPushButton("Gestisci tasselli")
+        self.tile_splitter_button.setFixedWidth(120)
+        self.tile_splitter_button.clicked.connect(self.open_tile_splitter)
+
+        self.tile_splitter_layout= QHBoxLayout()
+        self.tile_splitter_layout.addWidget(self.tile_splitter_button)
+        self.tile_splitter_layout.setAlignment(Qt.AlignCenter)
+
         # Color 
         self.color_label = QLabel("Colore selezionato:")
         self.color_label.setMaximumWidth(90)
@@ -146,7 +154,9 @@ class MainWindow(QMainWindow):
         color_layout.setAlignment(Qt.AlignCenter)
 
         layout = QVBoxLayout()
+        layout.addLayout(self.tile_splitter_layout)
         layout.addWidget(self.viewer)
+        layout.setAlignment(Qt.AlignCenter)
         layout.addLayout(color_layout)
 
         # Buttons
@@ -170,17 +180,12 @@ class MainWindow(QMainWindow):
         self.reset_button.setFixedWidth(80)
         self.reset_button.clicked.connect(self.reset_image)
 
-        self.tile_splitter_button = QPushButton("Gestisci tasselli")
-        self.tile_splitter_button.setFixedWidth(120)
-        self.tile_splitter_button.clicked.connect(self.open_tile_splitter)
-
         button_layout = QHBoxLayout()
         button_layout.addWidget(self.load_button)
         button_layout.addWidget(self.save_button)
         button_layout.addWidget(self.undo_button)
         button_layout.addWidget(self.redo_button)
         button_layout.addWidget(self.reset_button)
-        button_layout.addWidget(self.tile_splitter_button)
         button_layout.setAlignment(Qt.AlignCenter)
         layout.addLayout(button_layout)
         
