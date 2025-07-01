@@ -46,6 +46,7 @@ class AtlasManagerWindow(QWidget):
         self.load_button.clicked.connect(lambda: self.load_image())
 
         self.save_button = QPushButton("Salva")
+        self.save_button.clicked.connect(self.save_image)
 
         self.undo_button = QPushButton("Annulla")
         self.undo_button.clicked.connect(self.undo)
@@ -105,5 +106,11 @@ class AtlasManagerWindow(QWidget):
             parent=self
         )
 
+    def save_image(self):
+        if self.view.pixmap_item is None:
+            return
+        
+        pixmap = self.view.pixmap_item.pixmap()
+        save_pixmap_dialog(self, pixmap, "immagine")
 
 
