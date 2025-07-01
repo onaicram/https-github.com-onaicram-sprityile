@@ -4,6 +4,8 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtGui import QPixmap, QPainter
 from PyQt5.QtCore import QRect, Qt, QSize
 
+from controls_utils import save_pixmap_dialog
+
 
 class TileSplitterWidget(QWidget):
     def __init__(self, source_pixmap: QPixmap, selected_coords: set, tile_size: int):
@@ -62,9 +64,6 @@ class TileSplitterWidget(QWidget):
         
         main_layout.addLayout(self.save_layout)
 
-        
-        
-
     def preview_selected_tiles(self):
         tile_size = self.tile_size
         scale = 8 # fattore di scala
@@ -116,15 +115,6 @@ class TileSplitterWidget(QWidget):
         self.output_preview_label.setPixmap(scaled_preview)
 
     def save_output(self):
-        if not self.generated_pixmap:
-            return
-
-        file_path, _ = QFileDialog.getSaveFileName(
-            self,
-            "Salva immagine",
-            "",
-            "PNG (*.png);;JPEG (*.jpg *.jpeg);;BMP (*.bmp)"
-        )
-        if file_path:
-            self.generated_pixmap.save(file_path)
+        save_pixmap_dialog(self, self.generated_pixmap, "tasselli_generati")
+        
 

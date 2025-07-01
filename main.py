@@ -7,9 +7,12 @@ from PyQt5.QtGui import QPixmap, QPainter, QColor, QImage
 from PyQt5.QtCore import Qt, QRectF, pyqtSignal
 
 from tile_splitter import TileSplitterWindow
+from atlas_manager import AtlasManagerWindow
+from graphics_utils import draw_checkerboard_pixmap, auto_fit_view, apply_zoom, load_image_with_checker
+from controls_utils import save_pixmap_dialog, BasicDragMixin
 
 
-class ImageViewer(QGraphicsView):
+class ImageViewer(QGraphicsView, BasicDragMixin):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Sprityle")
@@ -22,6 +25,7 @@ class ImageViewer(QGraphicsView):
         self.checker_item = None
 
     color_picked = pyqtSignal(str)
+
     def mousePressEvent(self, event):
         if self.pixmap_item is None:
             return
@@ -35,77 +39,19 @@ class ImageViewer(QGraphicsView):
             hex_color = color.name().upper()
             self.color_picked.emit(hex_color)
 
-        self.setDragMode(QGraphicsView.ScrollHandDrag)
+        self.handle_drag_press(event)
         super().mousePressEvent(event)
 
-
     def mouseMoveEvent(self, event):
-        if self.dragMode() == QGraphicsView.ScrollHandDrag:
-            self.setCursor(Qt.ClosedHandCursor)
+        self.handle_drag_move(event)
         super().mouseMoveEvent(event)
 
-
     def mouseReleaseEvent(self, event):
-        self.setDragMode(QGraphicsView.NoDrag)
-        self.setCursor(Qt.ArrowCursor)  
+        self.handle_drag_release(event)
         super().mouseReleaseEvent(event)
-
-
-    def load_image(self, image_path, tile_size=16):
-        pixmap = QPixmap(image_path)
-        if pixmap.isNull():
-            print("Errore: immagine non valida")
-            return
-
-        self.scene.clear()
-        self.pixmap_item = QGraphicsPixmapItem(pixmap)
-        self.pixmap_item.setZValue(1)  # Assicura che l'immagine sia sopra la griglia
-        self.scene.addItem(self.pixmap_item)
-
-        self.draw_checkerboard(pixmap, tile_size)
-
-        self.setSceneRect(QRectF(pixmap.rect()))
-        self.resetTransform()
-        self.centerOn(self.pixmap_item)
         
-        # Adatta la vista alle dimensioni
-        view_width = self.viewport().width()
-        view_height = self.viewport().height()
-        pixmap_width = pixmap.width()
-        pixmap_height = pixmap.height()
-
-        scale_x = view_width / pixmap_width
-        scale_y = view_height / pixmap_height
-        scale = min(scale_x, scale_y) * 0.9
-
-        self.scale(scale, scale)
-
-
-    def draw_checkerboard(self, pixmap, checker_size=16):
-        
-        image_width, image_height = pixmap.width(), pixmap.height()
-        checkerboard = QPixmap(image_width, image_height)
-        checkerboard.fill(Qt.transparent)
-        painter = QPainter(checkerboard)
-        color1 = QColor(200, 200, 200)
-        color2 = QColor(255, 255, 255)
-
-        for y in range(0, image_height, checker_size):
-            for x in range(0, image_width, checker_size):
-                color = color1 if ((x // checker_size + y // checker_size) % 2 == 0) else color2
-                painter.fillRect(x, y, checker_size, checker_size, color)
-        painter.end()
-
-        checker_item = QGraphicsPixmapItem(checkerboard)
-        checker_item.setZValue(0)  # Assicura che il checkerboard sia sotto l'immagine
-        self.scene.addItem(checker_item)
-
-
     def wheelEvent(self, event):
-        zoom_in_factor = 1.15
-        zoom_out_factor = 1 / zoom_in_factor
-        zoom = zoom_in_factor if event.angleDelta().y() > 0 else zoom_out_factor
-        self.scale(zoom, zoom)
+        apply_zoom(self, event, zoom_in=1.15)
 
 
 class MainWindow(QMainWindow):
@@ -118,16 +64,21 @@ class MainWindow(QMainWindow):
 
         self.setWindowTitle("Sprityle")
 
-        self.viewer = ImageViewer()
+        self.view = ImageViewer()
         self.original_pixmap = None  
-        self.viewer.color_picked.connect(self.show_color)
+        self.view.color_picked.connect(self.show_color)
 
         self.tile_splitter_button = QPushButton("Gestisci tasselli")
         self.tile_splitter_button.setFixedWidth(120)
         self.tile_splitter_button.clicked.connect(self.open_tile_splitter)
 
+        self.atlas_manager_button = QPushButton("Gestisci Atlas")
+        self.atlas_manager_button.setFixedWidth(120)
+        self.atlas_manager_button.clicked.connect(self.open_atlas_manager)
+
         self.tile_splitter_layout= QHBoxLayout()
         self.tile_splitter_layout.addWidget(self.tile_splitter_button)
+        self.tile_splitter_layout.addWidget(self.atlas_manager_button)
         self.tile_splitter_layout.setAlignment(Qt.AlignCenter)
 
         # Color 
@@ -155,7 +106,7 @@ class MainWindow(QMainWindow):
 
         layout = QVBoxLayout()
         layout.addLayout(self.tile_splitter_layout)
-        layout.addWidget(self.viewer)
+        layout.addWidget(self.view)
         layout.setAlignment(Qt.AlignCenter)
         layout.addLayout(color_layout)
 
@@ -195,21 +146,30 @@ class MainWindow(QMainWindow):
 
 
     def open_tile_splitter(self):
-        if self.viewer.pixmap_item is None:
+        if self.view.pixmap_item is None:
             QMessageBox.warning(self, "Errore", "Nessuna immagine caricata.")
             return
 
-        pixmap = self.viewer.pixmap_item.pixmap().copy()
+        pixmap = self.view.pixmap_item.pixmap().copy()
 
         self.tile_splitter = TileSplitterWindow(pixmap)
         self.tile_splitter.show()
 
+    def open_atlas_manager(self):
+        pixmap = None
+        if self.view.pixmap_item and not self.view.pixmap_item.pixmap().isNull():
+            pixmap = self.view.pixmap_item.pixmap().copy()
+
+        self.atlas_manager = AtlasManagerWindow()
+        self.atlas_manager.load_image(pixmap)
+        self.atlas_manager.show()
+
 
     def remove_selected_color(self):
-        if self.viewer.pixmap_item is None:
+        if self.view.pixmap_item is None:
             return
         
-        original_pixmap = self.viewer.pixmap_item.pixmap()
+        original_pixmap = self.view.pixmap_item.pixmap()
         image = original_pixmap.toImage().convertToFormat(QImage.Format_ARGB32) 
 
         color_hex = self.color_field.text()
@@ -226,51 +186,52 @@ class MainWindow(QMainWindow):
                     changed = True
 
         if changed:
-            self.viewer.pixmap_item.setPixmap(QPixmap.fromImage(image))
+            self.view.pixmap_item.setPixmap(QPixmap.fromImage(image))
             self.save_state()
 
     def load_image(self):
-        file_path, _ = QFileDialog.getOpenFileName(self, "Apri immagine", "", "Immagini (*.png *.jpg *.bmp)")
-        if file_path:
-
-            tile_size = int(self.current_tile_size)
+    
+        tile_size = int(self.current_tile_size)
             
-            self.viewer.load_image(file_path, tile_size)
-            self.original_pixmap = self.viewer.pixmap_item.pixmap().copy()
-            self.undo_stack.clear()
-            self.redo_stack.clear()
-            
-            self.save_state()
+        self.view.pixmap_item = load_image_with_checker(
+            view=self.view,
+            scene=self.view.scene,
+            pixmap=None,
+            parent=self,
+            tile_size=tile_size 
+        )
+        
+        self.original_pixmap = self.view.pixmap_item.pixmap().copy()
+        self.undo_stack.clear()
+        self.redo_stack.clear()       
+        self.save_state()
 
     def save_image(self):
-        if self.viewer.pixmap_item is None:
+        if self.view.pixmap_item is None:
             return
-
-        file_path, _ = QFileDialog.getSaveFileName(
-            self, "Salva immagine", "", "PNG (*.png);;JPEG (*.jpg *.jpeg)"
-        )
-        if file_path:
-            self.viewer.pixmap_item.pixmap().save(file_path)
-            QMessageBox.information(self, "Salvataggio completato", "Immagine salvata con successo.")
+        
+        pixmap = self.view.pixmap_item.pixmap()
+        save_pixmap_dialog(self, pixmap, "immagine")
+            
 
     def reset_image(self):
-        if self.original_pixmap and self.viewer.pixmap_item:
+        if self.original_pixmap and self.view.pixmap_item:
             # Ripristina l'immagine originale
-            self.viewer.pixmap_item.setPixmap(QPixmap(self.original_pixmap))
+            self.view.pixmap_item.setPixmap(QPixmap(self.original_pixmap))
 
             # Pulisce gli stack di undo e redo
             self.undo_stack.clear()
             self.redo_stack.clear()
+            self.save_state()
 
             # Aggiorna lo stato visivo e informa l'utente
             self.color_field.setText("Nessun colore")
             QMessageBox.information(self, "Reset", "Immagine ripristinata.")
 
 
-
     def save_state(self):
-        if self.viewer.pixmap_item:
-            pixmap = self.viewer.pixmap_item.pixmap().copy()
+        if self.view.pixmap_item:
+            pixmap = self.view.pixmap_item.pixmap().copy()
             self.undo_stack.append(pixmap)
             self.redo_stack.clear()
 
@@ -279,13 +240,13 @@ class MainWindow(QMainWindow):
             current = self.undo_stack.pop()
             self.redo_stack.append(current)
             prev = self.undo_stack[-1]
-            self.viewer.pixmap_item.setPixmap(prev)
+            self.view.pixmap_item.setPixmap(prev)
 
     def redo(self):
         if self.redo_stack:
             next_state = self.redo_stack.pop()
             self.undo_stack.append(next_state)
-            self.viewer.pixmap_item.setPixmap(next_state)
+            self.view.pixmap_item.setPixmap(next_state)
 
 
     def show_color(self, hex_color):
