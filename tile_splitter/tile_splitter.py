@@ -1,11 +1,11 @@
 from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QGraphicsScene, QLineEdit, QGraphicsView,
-                             QHBoxLayout, QPushButton, QLabel, QGraphicsPixmapItem, QMessageBox, QGraphicsRectItem)
-from PyQt5.QtGui import QPixmap, QPainter, QColor, QPen, QBrush
+                             QHBoxLayout, QPushButton, QLabel, QGraphicsPixmapItem, QMessageBox)
+from PyQt5.QtGui import QPixmap, QPainter, QColor, QPen
 from PyQt5.QtCore import Qt, QRectF
 
-from tile_splitter_widget import TileSplitterWidget
-from graphics_utils import draw_checkerboard_pixmap, draw_grid_lines, auto_fit_view, apply_zoom
-from controls_utils import CtrlDragMixin
+from tile_splitter.tile_splitter_widget import TileSplitterWidget
+from utils.graphics_utils import draw_checkerboard_pixmap, draw_grid_lines, auto_fit_view, apply_zoom
+from utils.controls_utils import CtrlDragMixin
 
 
 class TileSplitterWindow(QWidget):

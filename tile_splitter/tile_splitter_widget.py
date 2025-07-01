@@ -1,10 +1,10 @@
 from PyQt5.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QLineEdit, QMessageBox, QFileDialog, QScrollArea
+    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QLineEdit, QMessageBox, QScrollArea
 )
 from PyQt5.QtGui import QPixmap, QPainter
 from PyQt5.QtCore import QRect, Qt, QSize
 
-from controls_utils import save_pixmap_dialog
+from utils.controls_utils import save_pixmap_dialog
 
 
 class TileSplitterWidget(QWidget):

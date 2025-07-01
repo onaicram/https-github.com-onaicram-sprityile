@@ -1,16 +1,16 @@
 import sys
 from PyQt5.QtWidgets import (
-    QApplication, QGraphicsView, QGraphicsScene, QGraphicsPixmapItem,
-    QFileDialog, QMainWindow, QWidget, QPushButton, QVBoxLayout, QLabel, QLineEdit, QHBoxLayout, QMessageBox
+    QApplication, QGraphicsView, QGraphicsScene,
+    QMainWindow, QWidget, QPushButton, QVBoxLayout, QLabel, QLineEdit, QHBoxLayout, QMessageBox
 )
 from PyQt5.QtGui import QPixmap, QPainter, QColor, QImage
 from PyQt5.QtCore import Qt, pyqtSignal
 
-from tile_splitter import TileSplitterWindow
-from atlas_manager import AtlasManagerWindow
-from graphics_utils import draw_checkerboard_pixmap, auto_fit_view, apply_zoom, load_image_with_checker
-from controls_utils import save_pixmap_dialog, BasicDragMixin
-from states_utils import save_state, reset_image, undo, redo
+from tile_splitter.tile_splitter import TileSplitterWindow
+from atlas.atlas_manager import AtlasManagerWindow
+from utils.graphics_utils import apply_zoom, load_image_with_checker
+from utils.controls_utils import save_pixmap_dialog, BasicDragMixin
+from utils.states_utils import save_state, reset_image, undo, redo
 
 
 class ImageViewer(QGraphicsView, BasicDragMixin):

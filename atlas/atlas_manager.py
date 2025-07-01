@@ -1,11 +1,11 @@
 from PyQt5.QtWidgets import (QWidget, QPushButton, QHBoxLayout, QVBoxLayout, 
-                             QFileDialog, QLabel, QMessageBox, QGraphicsView, QGraphicsScene, QGraphicsPixmapItem)
-from PyQt5.QtGui import QPixmap, QPainter, QColor, QPen
-from PyQt5.QtCore import Qt, QRectF
+                             QGraphicsView, QGraphicsScene)
+from PyQt5.QtGui import QPixmap, QPainter, QColor
+from PyQt5.QtCore import Qt
 
-from controls_utils import save_pixmap_dialog, BasicDragMixin
-from graphics_utils import apply_zoom, load_image_with_checker
-from states_utils import save_state, reset_image, undo, redo
+from utils.controls_utils import save_pixmap_dialog, BasicDragMixin
+from utils.graphics_utils import apply_zoom, load_image_with_checker
+from utils.states_utils import save_state, reset_image, undo, redo
 
 class AtlasGraphicsView(QGraphicsView, BasicDragMixin):
     def __init__(self, parent=None):
@@ -14,6 +14,7 @@ class AtlasGraphicsView(QGraphicsView, BasicDragMixin):
         self.setBackgroundBrush(QColor(220, 220, 220))
         self.setTransformationAnchor(QGraphicsView.AnchorUnderMouse)
         self.setDragMode(QGraphicsView.ScrollHandDrag)
+        self.pixmap_item = None
 
     def wheelEvent(self, event):
         apply_zoom(self, event)
@@ -81,8 +82,9 @@ class AtlasManagerWindow(QWidget):
             tile_size=16
         )
 
+        self.view.pixmap_item = self.pixmap
         self.original_pixmap = self.view.pixmap_item.pixmap().copy()
-        save_state()
+        self.save_state()
         
     def undo(self):
         undo(self.view.pixmap_item, self.undo_stack, self.redo_stack)
