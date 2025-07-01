@@ -4,12 +4,13 @@ from PyQt5.QtWidgets import (
     QFileDialog, QMainWindow, QWidget, QPushButton, QVBoxLayout, QLabel, QLineEdit, QHBoxLayout, QMessageBox
 )
 from PyQt5.QtGui import QPixmap, QPainter, QColor, QImage
-from PyQt5.QtCore import Qt, QRectF, pyqtSignal
+from PyQt5.QtCore import Qt, pyqtSignal
 
 from tile_splitter import TileSplitterWindow
 from atlas_manager import AtlasManagerWindow
 from graphics_utils import draw_checkerboard_pixmap, auto_fit_view, apply_zoom, load_image_with_checker
 from controls_utils import save_pixmap_dialog, BasicDragMixin
+from states_utils import save_state, reset_image, undo, redo
 
 
 class ImageViewer(QGraphicsView, BasicDragMixin):
@@ -200,7 +201,7 @@ class MainWindow(QMainWindow):
             parent=self,
             tile_size=tile_size 
         )
-        
+
         self.original_pixmap = self.view.pixmap_item.pixmap().copy()
         self.undo_stack.clear()
         self.redo_stack.clear()       
@@ -215,39 +216,17 @@ class MainWindow(QMainWindow):
             
 
     def reset_image(self):
-        if self.original_pixmap and self.view.pixmap_item:
-            # Ripristina l'immagine originale
-            self.view.pixmap_item.setPixmap(QPixmap(self.original_pixmap))
-
-            # Pulisce gli stack di undo e redo
-            self.undo_stack.clear()
-            self.redo_stack.clear()
-            self.save_state()
-
-            # Aggiorna lo stato visivo e informa l'utente
-            self.color_field.setText("Nessun colore")
-            QMessageBox.information(self, "Reset", "Immagine ripristinata.")
-
+        reset_image(self.view.pixmap_item, self.original_pixmap, 
+                    self.undo_stack, self.redo_stack, self.color_field, self)
 
     def save_state(self):
-        if self.view.pixmap_item:
-            pixmap = self.view.pixmap_item.pixmap().copy()
-            self.undo_stack.append(pixmap)
-            self.redo_stack.clear()
+        save_state(self.view.pixmap_item, self.undo_stack, self.redo_stack)
 
     def undo(self):
-        if len(self.undo_stack) > 1:
-            current = self.undo_stack.pop()
-            self.redo_stack.append(current)
-            prev = self.undo_stack[-1]
-            self.view.pixmap_item.setPixmap(prev)
+        undo(self.view.pixmap_item, self.undo_stack, self.redo_stack)
 
     def redo(self):
-        if self.redo_stack:
-            next_state = self.redo_stack.pop()
-            self.undo_stack.append(next_state)
-            self.view.pixmap_item.setPixmap(next_state)
-
+        redo(self.view.pixmap_item, self.undo_stack, self.redo_stack)
 
     def show_color(self, hex_color):
         self.color_field.setText(hex_color)

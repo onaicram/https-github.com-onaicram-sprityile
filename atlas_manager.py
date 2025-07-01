@@ -4,7 +4,8 @@ from PyQt5.QtGui import QPixmap, QPainter, QColor, QPen
 from PyQt5.QtCore import Qt, QRectF
 
 from controls_utils import save_pixmap_dialog, BasicDragMixin
-from graphics_utils import draw_checkerboard_pixmap, auto_fit_view, apply_zoom, load_image_with_checker
+from graphics_utils import apply_zoom, load_image_with_checker
+from states_utils import save_state, reset_image, undo, redo
 
 class AtlasGraphicsView(QGraphicsView, BasicDragMixin):
     def __init__(self, parent=None):
@@ -37,15 +38,23 @@ class AtlasManagerWindow(QWidget):
         self.view = AtlasGraphicsView()
         self.scene = QGraphicsScene(self)
         self.view.setScene(self.scene)
+        self.undo_stack = []
+        self.redo_stack = []
         
         # Basic Buttons
         self.load_button = QPushButton("Carica")
         self.load_button.clicked.connect(lambda: self.load_image())
 
         self.save_button = QPushButton("Salva")
+
         self.undo_button = QPushButton("Annulla")
+        self.undo_button.clicked.connect(self.undo)
+
         self.redo_button = QPushButton("Ripeti")
+        self.redo_button.clicked.connect(self.redo)
+
         self.reset_button = QPushButton("Ripristina")
+        self.reset_button.clicked.connect(self.reset_image)
 
         button_layout = QHBoxLayout()
         button_layout.addWidget(self.load_button)
@@ -70,7 +79,31 @@ class AtlasManagerWindow(QWidget):
             parent=self,
             tile_size=16
         )
+
+        self.original_pixmap = self.view.pixmap_item.pixmap().copy()
+        save_state()
         
+    def undo(self):
+        undo(self.view.pixmap_item, self.undo_stack, self.redo_stack)
+
+    def redo(self):
+        redo(self.view.pixmap_item, self.undo_stack, self.redo_stack)
+
+    def save_state(self):
+        save_state(
+            pixmap_item=self.view.pixmap_item,
+            undo_stack=self.undo_stack,
+            redo_stack=self.redo_stack
+        )
+
+    def reset_image(self):
+        reset_image(
+            pixmap_item=self.view.pixmap_item,
+            original_pixmap=self.original_pixmap,
+            undo_stack=self.undo_stack,
+            redo_stack=self.redo_stack,
+            parent=self
+        )
 
 
 
