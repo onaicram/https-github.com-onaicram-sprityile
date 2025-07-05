@@ -1,7 +1,25 @@
 from PyQt5.QtWidgets import QFileDialog, QGraphicsPixmapItem, QMessageBox, QGraphicsView, QGraphicsScene
-from PyQt5.QtGui import QPixmap, QColor, QPainter, QPen
+from PyQt5.QtGui import QPixmap, QColor, QPainter, QBrush
 from PyQt5.QtCore import QRectF
 from typing import Optional
+
+def draw_checkerboard_for_view(view, tile_size: int):
+    if view.pixmap_item is None:
+        return
+
+    # controlla se checker_item è valido
+    if hasattr(view, "checker_item") and view.checker_item is not None:
+        try:
+            view.scene().removeItem(view.checker_item)
+        except RuntimeError:
+            pass  # È già stato distrutto, ignora
+
+    pixmap = view.pixmap_item.pixmap()
+    checker_pixmap = draw_checkerboard_pixmap(pixmap.width(), pixmap.height(), tile_size)
+    checker_item = QGraphicsPixmapItem(checker_pixmap)
+    checker_item.setZValue(0)
+    view.scene().addItem(checker_item)
+    view.checker_item = checker_item
 
 
 def draw_checkerboard_pixmap(width, height, tile_size=16):
@@ -20,22 +38,6 @@ def draw_checkerboard_pixmap(width, height, tile_size=16):
     painter.end()
     return checkerboard
 
-def draw_grid_lines(scene, pixmap_width, pixmap_height, tile_size=16, z=10, color=QColor(255, 100, 0, 255)):
-    grid_items = []
-    pen = QPen(color)
-    pen.setWidthF(0.0)
-
-    for x in range(0, pixmap_width + 1, tile_size):
-        line = scene.addLine(x, 0, x, pixmap_height, pen)
-        line.setZValue(z)
-        grid_items.append(line)
-
-    for y in range(0, pixmap_height + 1, tile_size):
-        line = scene.addLine(0, y, pixmap_width, y, pen)
-        line.setZValue(z)
-        grid_items.append(line)
-
-    return grid_items
 
 def auto_fit_view(view, pixmap_or_pixitem, margin_ratio=0.9):
 
@@ -60,10 +62,6 @@ def auto_fit_view(view, pixmap_or_pixitem, margin_ratio=0.9):
         view.centerOn(pixmap_or_pixitem)
     else:
         view.centerOn(pixmap_width / 2, pixmap_height / 2)
-
-def apply_zoom(view, event, zoom_in=1.15):
-    factor = zoom_in if event.angleDelta().y() > 0 else 1 / zoom_in
-    view.scale(factor, factor)
 
 
 def load_image_with_checker(view, scene, pixmap: Optional[QPixmap] = None, parent=None, tile_size=16) -> Optional[QGraphicsPixmapItem]:

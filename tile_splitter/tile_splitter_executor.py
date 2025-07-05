@@ -10,7 +10,7 @@ from utils.controls_utils import save_pixmap_dialog
 class TileSplitterWidget(QWidget):
     def __init__(self, source_pixmap: QPixmap, selected_coords: set, tile_size: int):
         super().__init__()
-        self.setWindowTitle("Genera Tasselli")
+        self.setWindowTitle("Genera Tile")
         self.source_pixmap = source_pixmap
         self.selected_coords = selected_coords
         self.tile_size = tile_size
@@ -29,7 +29,7 @@ class TileSplitterWidget(QWidget):
         controls_layout = QHBoxLayout()
         controls_layout.setAlignment(Qt.AlignCenter)
         
-        self.repeat_label = QLabel("Ripetizioni:")
+        self.repeat_label = QLabel("Numero Tile:")
         self.repeat_label.setFixedWidth(60)
 
         self.repeat_field = QLineEdit("4")

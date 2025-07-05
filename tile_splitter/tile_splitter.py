@@ -1,17 +1,18 @@
-from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QGraphicsScene, QLineEdit, QGraphicsView,
-                             QHBoxLayout, QPushButton, QLabel, QGraphicsPixmapItem, QMessageBox)
+from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QGraphicsScene, QGraphicsView,
+                             QHBoxLayout, QPushButton, QLabel, QGraphicsPixmapItem, QMessageBox, QSpinBox)
 from PyQt5.QtGui import QPixmap, QPainter, QColor, QPen
 from PyQt5.QtCore import Qt, QRectF
 
-from tile_splitter.tile_splitter_widget import TileSplitterWidget
-from utils.graphics_utils import draw_checkerboard_pixmap, draw_grid_lines, auto_fit_view, apply_zoom
-from utils.controls_utils import CtrlDragMixin
-
+from tile_splitter.tile_splitter_executor import TileSplitterWidget
+from utils.graphics_utils import draw_checkerboard_for_view, auto_fit_view
+from utils.controls_utils import apply_zoom, CtrlDragMixin
+from utils.grid_utils import draw_grid_ui
+from utils.states_utils import save_state
 
 class TileSplitterWindow(QWidget):
     def __init__(self, source_pixmap: QPixmap):
         super().__init__()
-        self.setWindowTitle("Gestione Tasselli")
+        self.setWindowTitle("Gestione Tile")
         self.source_pixmap = source_pixmap
         self.view = GridGraphicsView()
         self.view.setScene(QGraphicsScene())
@@ -23,21 +24,21 @@ class TileSplitterWindow(QWidget):
         self.view.resetTransform()
         self.resize(800, 600)  
         self.tile_size = 16
-        self.init_ui()
-
-    def init_ui(self):
-
-        # Griglia UI
-        self.grid_size_field = QLineEdit("16")
-        self.grid_size_field.setFixedWidth(40)
-        grid_label = QLabel("Dimensione griglia:")
-        grid_label.setFixedWidth(100)
         
-        self.grid_button = QPushButton("Attiva griglia")
+        # Griglia UI
+        grid_label = QLabel("Dimensione Tile:")
+        grid_label.setFixedWidth(80)
+
+        self.grid_size_field = QSpinBox()
+        self.grid_size_field.setRange(1, 256)
+        self.grid_size_field.setValue(16)
+        self.grid_size_field.setFixedWidth(40)
+        
+        self.grid_button = QPushButton("Griglia")
         self.grid_button.setCheckable(True)
         self.grid_button.setChecked(False)
         self.grid_button.setFixedWidth(100)
-        self.grid_button.clicked.connect(self.draw_grid)
+        self.grid_button.clicked.connect(lambda: draw_grid_ui(self.view, self.grid_size_field, self.grid_button))
 
         self.separator_button = QPushButton("Avvia separazione")
         self.separator_button.setFixedWidth(100)
@@ -52,37 +53,18 @@ class TileSplitterWindow(QWidget):
 
         # Layout complessivo
         layout = QVBoxLayout()
-        layout.addLayout(grid_layout)
         layout.addWidget(self.view)
+        layout.addLayout(grid_layout)
         self.setLayout(layout)
 
         # Adattamento iniziale
         auto_fit_view(self.view, self.source_pixmap)
-        self.view.draw_checkerboard()
+        draw_checkerboard_for_view(self.view, self.tile_size)
 
-    def draw_grid(self):
-        try:
-            tile_size = int(self.grid_size_field.text())
-            self.tile_size = tile_size
-            self.view.set_tile_size(tile_size)
-        except ValueError:
-            QMessageBox.warning(self, "Errore", "Dimensione griglia non valida.")
-            return
-        
-        self.view.draw_checkerboard(tile_size)
-
-        if self.grid_button.isChecked():
-            self.grid_button.setText("Disattiva griglia")
-            self.view.grid_visible = True
-            self.view.draw_grid(tile_size)
-        else:
-            self.grid_button.setText("Attiva griglia")
-            self.view.grid_visible = False
-            self.view.clear_grid()
 
     def open_tile_splitter(self):
         if not hasattr(self.view, "selected_coords") or not self.view.selected_coords:
-            QMessageBox.warning(self, "Errore", "Nessun tassello selezionato.")
+            QMessageBox.warning(self, "Errore", "Nessun tile selezionato.")
             return
 
         try:
@@ -113,27 +95,6 @@ class GridGraphicsView(QGraphicsView, CtrlDragMixin):
         self.selected_coords = set()
         self.grid_visible = False
 
-    def draw_checkerboard(self, tile_size=16):
-        if self.pixmap_item is None:
-            return
-
-        # Rimuove eventuale checkerboard precedente
-        if hasattr(self, "checker_item") and self.checker_item:
-            self.scene().removeItem(self.checker_item)
-
-        image_size = self.pixmap_item.pixmap().size()
-        checkerboard = draw_checkerboard_pixmap(image_size.width(), image_size.height(), tile_size)
-        
-        self.checker_item = QGraphicsPixmapItem(checkerboard)
-        self.checker_item.setZValue(0)
-        self.scene().addItem(self.checker_item)
-
-    def clear_grid(self):
-        if hasattr(self, "grid_items"):
-            for item in self.grid_items:
-                self.scene().removeItem(item)
-            self.grid_items.clear()
-
 
     def mousePressEvent(self, event):
         if self.grid_visible:
@@ -159,7 +120,17 @@ class GridGraphicsView(QGraphicsView, CtrlDragMixin):
                     else:
                         # Seleziona
                         self.selected_coords.add(coord)
-                        self._highlight_tile(coord)         
+                        self._highlight_tile(coord) 
+
+                    print(f"[SELECT TILE] tile selezionato: {coord}")
+                    if hasattr(self.window(), "undo_stack") and self.pixmap_item:
+                        save_state(
+                            self.pixmap_item,
+                            self.selected_coords,
+                            self.window().undo_stack,
+                            self.window().redo_stack
+                        )
+
         else:
             self.handle_drag_press(event)
                 
@@ -197,20 +168,6 @@ class GridGraphicsView(QGraphicsView, CtrlDragMixin):
     def wheelEvent(self, event):
         apply_zoom(self, event, zoom_in=1.15)
 
-    def draw_grid(self, tile_size=16):
-        self.grid_visible = True
-        scene = self.scene()
-        if self.pixmap_item is None:
-            return
-        
-        if hasattr(self, "grid_items"):
-            for item in self.grid_items:
-                scene.removeItem(item)
-        self.grid_items = []
-
-        pixmap_rect = self.pixmap_item.pixmap().rect()
-        self.grid_items = draw_grid_lines(
-            scene, pixmap_rect.width(), pixmap_rect.height(), tile_size)
         
 
 

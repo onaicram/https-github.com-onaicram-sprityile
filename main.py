@@ -8,9 +8,9 @@ from PyQt5.QtCore import Qt, pyqtSignal
 
 from tile_splitter.tile_splitter import TileSplitterWindow
 from atlas.atlas_manager import AtlasManagerWindow
-from utils.graphics_utils import apply_zoom, load_image_with_checker
-from utils.controls_utils import save_pixmap_dialog, BasicDragMixin
-from utils.states_utils import save_state, reset_image, undo, redo
+from utils.graphics_utils import load_image_with_checker
+from utils.controls_utils import save_pixmap_dialog, apply_zoom, BasicDragMixin
+from utils.states_utils import save_state, undo_state, redo_state, reset_state
 
 
 class ImageViewer(QGraphicsView, BasicDragMixin):
@@ -69,11 +69,11 @@ class MainWindow(QMainWindow):
         self.original_pixmap = None  
         self.view.color_picked.connect(self.show_color)
 
-        self.tile_splitter_button = QPushButton("Gestisci tasselli")
+        self.tile_splitter_button = QPushButton("Gestione Tile")
         self.tile_splitter_button.setFixedWidth(120)
         self.tile_splitter_button.clicked.connect(self.open_tile_splitter)
 
-        self.atlas_manager_button = QPushButton("Gestisci Atlas")
+        self.atlas_manager_button = QPushButton("Gestione Atlas")
         self.atlas_manager_button.setFixedWidth(120)
         self.atlas_manager_button.clicked.connect(self.open_atlas_manager)
 
@@ -216,17 +216,38 @@ class MainWindow(QMainWindow):
             
 
     def reset_image(self):
-        reset_image(self.view.pixmap_item, self.original_pixmap, 
-                    self.undo_stack, self.redo_stack, self.color_field, self)
+        reset_state(
+            self.view.pixmap_item,
+            self.original_pixmap,
+            set(),
+            self.undo_stack,
+            self.redo_stack,
+            restore_selection_fn=None,
+            color_field=self.color_field,
+            parent=self
+        )
 
     def save_state(self):
-        save_state(self.view.pixmap_item, self.undo_stack, self.redo_stack)
+        save_state(self.view.pixmap_item, set(), self.undo_stack, self.redo_stack)
+
 
     def undo(self):
-        undo(self.view.pixmap_item, self.undo_stack, self.redo_stack)
+        undo_state(
+            self.view.pixmap_item,
+            set(),  # Nessuna selezione in ImageViewer
+            self.undo_stack,
+            self.redo_stack,
+            restore_selection_fn=None
+        )
 
     def redo(self):
-        redo(self.view.pixmap_item, self.undo_stack, self.redo_stack)
+        redo_state(
+            self.view.pixmap_item,
+            set(),
+            self.undo_stack,
+            self.redo_stack,
+            restore_selection_fn=None
+        )
 
     def show_color(self, hex_color):
         self.color_field.setText(hex_color)
@@ -243,6 +264,11 @@ class MainWindow(QMainWindow):
 if __name__ == "__main__":
     app = QApplication(sys.argv)
     window = MainWindow()
-    window.resize(900, 700)
+    window.resize(800, 600)
     window.show()
     sys.exit(app.exec_())
+
+
+
+
+
