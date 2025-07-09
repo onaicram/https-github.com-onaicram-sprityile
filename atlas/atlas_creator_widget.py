@@ -36,7 +36,9 @@ class AtlasCreatorView(QGraphicsView, CtrlDragMixin):
     def show_images(self, images, paths, start_idx):
         spacing = 16
         fixed_size = self.tile_size
-        self.image_items.clear()
+
+        if not hasattr(self, "last_offset"):
+            self.last_offset = 0
 
         x_offset = self.last_offset
 
@@ -44,13 +46,13 @@ class AtlasCreatorView(QGraphicsView, CtrlDragMixin):
             name = path.split("/")[-1]
             group = {}
 
-            # Riquadro base
+            # --- Riquadro base
             rect = QGraphicsRectItem(0, 0, fixed_size, fixed_size)
             rect.setBrush(QBrush(QColor(250, 250, 250)))
             rect.setPen(QPen(QColor(150, 150, 150)))
             rect.setZValue(0)
 
-            # Immagine
+            # --- Immagine
             scaled = pixmap.scaled(fixed_size, fixed_size, Qt.KeepAspectRatio, Qt.SmoothTransformation)
             img_item = QGraphicsPixmapItem(scaled)
             dx = (fixed_size - scaled.width()) / 2
@@ -58,7 +60,7 @@ class AtlasCreatorView(QGraphicsView, CtrlDragMixin):
             img_item.setOffset(dx, dy)
             img_item.setZValue(1)
 
-            # Testo centrato sotto
+            # --- Testo
             text_item = QGraphicsTextItem(name)
             text_item.setFont(QFont("Arial", 8))
             text_item.setTextWidth(self.tile_size)
@@ -68,23 +70,26 @@ class AtlasCreatorView(QGraphicsView, CtrlDragMixin):
             text_item.setPos(0, self.tile_size + 2)
             text_item.setZValue(2)
 
-            # Gruppo
+            # --- Gruppo
             group_item = self.scene.createItemGroup([rect, img_item, text_item])
             group_item.setPos(x_offset, 0)
             group_item.setZValue(3)
 
+            # --- Highlight selezione (invisibile di default)
             highlight = QGraphicsRectItem(0, 0, fixed_size, fixed_size)
             highlight.setBrush(QColor(255, 165, 0, 150))
             highlight.setPen(QPen(Qt.NoPen))
             highlight.setZValue(5)
             highlight.setVisible(False)
-            highlight.setParentItem(group_item)
-            
+            highlight.setParentItem(group_item)  # ⬅️ FONDAMENTALE
+
+            # --- Registra tutto
             group["rect"] = rect
             group["pixmap"] = pixmap
             group["path"] = path
             group["group"] = group_item
             group["highlight"] = highlight
+
             self.image_items.append(group)
 
             self.item_map[rect] = group
@@ -92,8 +97,11 @@ class AtlasCreatorView(QGraphicsView, CtrlDragMixin):
             self.item_map[text_item] = group
             self.item_map[group_item] = group
 
+
             x_offset += fixed_size + spacing
-            self.last_offset = x_offset
+
+        self.last_offset = x_offset
+
 
     def mousePressEvent(self, event):
         if event.button() == Qt.LeftButton:
@@ -141,8 +149,13 @@ class AtlasCreator(QWidget):
         self.load_button.setFixedWidth(120)
         self.load_button.clicked.connect(self.load_images)
 
+        self.delete_button = QPushButton("Elimina selezionate")
+        self.delete_button.setFixedWidth(120)
+        self.delete_button.clicked.connect(self.delete_selected_images)
+
         btn_layout = QHBoxLayout()
         btn_layout.addWidget(self.load_button)
+        btn_layout.addWidget(self.delete_button)
         btn_layout.setAlignment(Qt.AlignCenter)
 
         layout = QVBoxLayout()
@@ -176,3 +189,31 @@ class AtlasCreator(QWidget):
         self.loaded_images.extend(new_images)
         self.loaded_names.extend(new_paths)
         self.view.show_images(new_images, new_paths, start_idx)
+
+    def delete_selected_images(self):
+        print("\n--- AVVIO CANCELLAZIONE ---")
+
+        to_remove = []
+        for item in self.view.image_items:
+            is_visible = item["highlight"].isVisible()
+            path = item["path"]
+            print(f"Checking: {path}, selezionata: {is_visible}")
+            if is_visible:
+                to_remove.append(item)
+
+        print(f"Totali da rimuovere: {len(to_remove)}")
+
+        for item in to_remove:
+            print(f"Rimuovo: {item['path']}")
+            self.view.scene.removeItem(item["group"])
+            self.view.image_items.remove(item)
+            if item["path"] in self.loaded_names:
+                self.loaded_names.remove(item["path"])
+
+    
+
+        
+
+
+
+
