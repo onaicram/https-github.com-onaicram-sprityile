@@ -1,10 +1,10 @@
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QGraphicsView,
-    QGraphicsScene, QGraphicsPixmapItem, QGraphicsRectItem, QGraphicsTextItem,
+    QGraphicsScene, QGraphicsPixmapItem, QGraphicsRectItem, QGraphicsTextItem, QShortcut,
     QFileDialog, QMessageBox
 )
-from PyQt5.QtGui import QPixmap, QPainter, QColor, QPen, QBrush, QFont, QTextOption
-from PyQt5.QtCore import Qt, QRectF
+from PyQt5.QtGui import QPixmap, QPainter, QColor, QPen, QBrush, QFont, QTextOption, QKeySequence
+from PyQt5.QtCore import Qt
 
 from utils.controls_utils import CtrlDragMixin
 
@@ -81,7 +81,7 @@ class AtlasCreatorView(QGraphicsView, CtrlDragMixin):
             highlight.setPen(QPen(Qt.NoPen))
             highlight.setZValue(5)
             highlight.setVisible(False)
-            highlight.setParentItem(group_item)  # ⬅️ FONDAMENTALE
+            highlight.setParentItem(group_item)
 
             # --- Registra tutto
             group["rect"] = rect
@@ -120,7 +120,7 @@ class AtlasCreatorView(QGraphicsView, CtrlDragMixin):
                         group['highlight'].setVisible(True)
                         self.selected_pixmaps.add(pixmap)
                         print(f"Selezionato: {group['path'].split('/')[-1]}")
-                    return  # evita doppio trigger
+                    return
 
         self.handle_drag_press(event)
         super().mousePressEvent(event)
@@ -132,6 +132,18 @@ class AtlasCreatorView(QGraphicsView, CtrlDragMixin):
     def mouseReleaseEvent(self, event):
         self.handle_drag_release(event)
         super().mouseReleaseEvent(event)
+
+    def relayout_images(self):
+        spacing = 16
+        fixed_size = self.tile_size
+        x_offset = 0
+
+        for group in self.image_items:
+            group["group"].setPos(x_offset, 0)
+            x_offset += fixed_size + spacing
+
+        self.last_offset = x_offset
+
 
 
 class AtlasCreator(QWidget):
@@ -149,9 +161,12 @@ class AtlasCreator(QWidget):
         self.load_button.setFixedWidth(120)
         self.load_button.clicked.connect(self.load_images)
 
-        self.delete_button = QPushButton("Elimina selezionate")
+        self.delete_button = QPushButton("Elimina immagini")
         self.delete_button.setFixedWidth(120)
         self.delete_button.clicked.connect(self.delete_selected_images)
+
+        self.delete_shortcut = QShortcut(QKeySequence("D"), self)
+        self.delete_shortcut.activated.connect(lambda: self.delete_button.click())
 
         btn_layout = QHBoxLayout()
         btn_layout.addWidget(self.load_button)
@@ -190,18 +205,12 @@ class AtlasCreator(QWidget):
         self.loaded_names.extend(new_paths)
         self.view.show_images(new_images, new_paths, start_idx)
 
-    def delete_selected_images(self):
-        print("\n--- AVVIO CANCELLAZIONE ---")
-
+    def delete_selected_images(self): 
         to_remove = []
         for item in self.view.image_items:
             is_visible = item["highlight"].isVisible()
-            path = item["path"]
-            print(f"Checking: {path}, selezionata: {is_visible}")
             if is_visible:
                 to_remove.append(item)
-
-        print(f"Totali da rimuovere: {len(to_remove)}")
 
         for item in to_remove:
             print(f"Rimuovo: {item['path']}")
@@ -209,6 +218,8 @@ class AtlasCreator(QWidget):
             self.view.image_items.remove(item)
             if item["path"] in self.loaded_names:
                 self.loaded_names.remove(item["path"])
+
+        self.view.relayout_images()
 
     
 
