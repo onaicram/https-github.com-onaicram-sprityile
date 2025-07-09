@@ -103,9 +103,16 @@ class AtlasCreatorView(QGraphicsView, CtrlDragMixin):
             for item in items:
                 if item in self.item_map:
                     group = self.item_map[item]
-                    group["highlight"].setVisible(True)
-                    self.selected_pixmaps.add(group["pixmap"])
-                    return
+                    pixmap = group['pixmap']
+                    if pixmap in self.selected_pixmaps:
+                        group['highlight'].setVisible(False)
+                        self.selected_pixmaps.remove(pixmap)
+                        print(f"Deselezionato: {group['path'].split('/')[-1]}")
+                    else:
+                        group['highlight'].setVisible(True)
+                        self.selected_pixmaps.add(pixmap)
+                        print(f"Selezionato: {group['path'].split('/')[-1]}")
+                    return  # evita doppio trigger
 
         self.handle_drag_press(event)
         super().mousePressEvent(event)
