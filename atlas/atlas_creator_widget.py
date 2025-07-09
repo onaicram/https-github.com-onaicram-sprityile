@@ -19,9 +19,11 @@ class AtlasCreatorView(QGraphicsView, CtrlDragMixin):
         self.scene = QGraphicsScene()
         self.setScene(self.scene)
         self.image_items = []
+        self.last_offset = 0
+        self.item_map = {}
 
         self.tile_size = 96
-        self.item_map = {}  # { QGraphicsRectItem: image_name }
+        self.selected_pixmaps = set()
 
     def mouseMoveEvent(self, event):
         self.handle_drag_move(event)
@@ -36,13 +38,7 @@ class AtlasCreatorView(QGraphicsView, CtrlDragMixin):
         fixed_size = self.tile_size
         self.image_items.clear()
 
-        # Calcola x_offset partendo dalla fine dell’ultima immagine
-        items = self.scene.items()
-        if not items:
-            x_offset = 0
-        else:
-            max_x = max(item.sceneBoundingRect().right() for item in items)
-            x_offset = max_x + spacing
+        x_offset = self.last_offset
 
         for idx, (pixmap, path) in enumerate(zip(images, paths), start=start_idx):
             name = path.split("/")[-1]
@@ -77,13 +73,27 @@ class AtlasCreatorView(QGraphicsView, CtrlDragMixin):
             group_item.setPos(x_offset, 0)
             group_item.setZValue(3)
 
+            highlight = QGraphicsRectItem(0, 0, fixed_size, fixed_size)
+            highlight.setBrush(QColor(255, 165, 0, 150))
+            highlight.setPen(QPen(Qt.NoPen))
+            highlight.setZValue(5)
+            highlight.setVisible(False)
+            highlight.setParentItem(group_item)
+            
             group["rect"] = rect
             group["pixmap"] = pixmap
             group["path"] = path
             group["group"] = group_item
+            group["highlight"] = highlight
             self.image_items.append(group)
 
+            self.item_map[rect] = group
+            self.item_map[img_item] = group
+            self.item_map[text_item] = group
+            self.item_map[group_item] = group
+
             x_offset += fixed_size + spacing
+            self.last_offset = x_offset
 
     def mousePressEvent(self, event):
         if event.button() == Qt.LeftButton:
@@ -91,12 +101,11 @@ class AtlasCreatorView(QGraphicsView, CtrlDragMixin):
             items = self.scene.items(scene_pos)
 
             for item in items:
-                for group in self.image_items:
-                    if item in (group["rect"], group["group"]):
-                        
-                        # Debug print
-                        print(f"Clicked on: {group['path'].split('/')[-1]}")
-                        return
+                if item in self.item_map:
+                    group = self.item_map[item]
+                    group["highlight"].setVisible(True)
+                    self.selected_pixmaps.add(group["pixmap"])
+                    return
 
         self.handle_drag_press(event)
         super().mousePressEvent(event)
@@ -114,7 +123,7 @@ class AtlasCreator(QWidget):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Crea Atlas da Immagini")
-        self.resize(800, 400)
+        self.resize(600, 400)
 
         self.loaded_images = []
         self.loaded_names = []
@@ -144,7 +153,7 @@ class AtlasCreator(QWidget):
 
         for file_path in files:
             if file_path in self.loaded_names:
-                continue  # evita duplicati
+                continue
 
             pixmap = QPixmap(file_path)
             if pixmap.isNull():
