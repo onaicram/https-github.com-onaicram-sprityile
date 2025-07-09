@@ -66,7 +66,7 @@ class TileSplitterWidget(QWidget):
 
     def preview_selected_tiles(self):
         tile_size = self.tile_size
-        scale = 8 # fattore di scala
+        scale = 6 # fattore di scala
         for x, y in sorted(self.selected_coords):
             rect = QRect(x * tile_size, y * tile_size, tile_size, tile_size)
             tile = self.source_pixmap.copy(rect)
@@ -87,7 +87,7 @@ class TileSplitterWidget(QWidget):
 
         tile_size = self.tile_size
         selected = sorted(self.selected_coords)
-        rows = len(selected)
+        rows = 2 * len(selected) - 1
         width = tile_size * repeat_count
         height = tile_size * rows
 
@@ -100,7 +100,7 @@ class TileSplitterWidget(QWidget):
             tile = self.source_pixmap.copy(x * tile_size, y * tile_size, tile_size, tile_size)
             for col in range(repeat_count):
                 x_pos = col * tile_size
-                y_pos = row * tile_size
+                y_pos = row * tile_size * 2
                 painter.drawPixmap(x_pos, y_pos, tile)
         painter.end()
         self.generated_pixmap = output

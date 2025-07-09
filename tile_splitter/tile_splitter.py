@@ -1,6 +1,6 @@
 from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QGraphicsScene, QGraphicsView,
-                             QHBoxLayout, QPushButton, QLabel, QGraphicsPixmapItem, QMessageBox, QSpinBox)
-from PyQt5.QtGui import QPixmap, QPainter, QColor, QPen
+                             QHBoxLayout, QPushButton, QLabel, QGraphicsPixmapItem, QMessageBox, QSpinBox, QShortcut)
+from PyQt5.QtGui import QPixmap, QPainter, QColor, QPen, QKeySequence
 from PyQt5.QtCore import Qt, QRectF
 
 from tile_splitter.tile_splitter_executor import TileSplitterWidget
@@ -24,6 +24,9 @@ class TileSplitterWindow(QWidget):
         self.view.resetTransform()
         self.resize(800, 600)  
         self.tile_size = 16
+        self.grid_shortcut = QShortcut(QKeySequence("G"), self)
+        self.grid_shortcut.activated.connect(lambda: self.grid_button.click())
+        
         
         # Griglia UI
         grid_label = QLabel("Dimensione Tile:")
@@ -94,7 +97,7 @@ class GridGraphicsView(QGraphicsView, CtrlDragMixin):
         self.selected_tiles = []
         self.selected_coords = set()
         self.grid_visible = False
-
+        
 
     def mousePressEvent(self, event):
         if self.grid_visible:
@@ -122,7 +125,6 @@ class GridGraphicsView(QGraphicsView, CtrlDragMixin):
                         self.selected_coords.add(coord)
                         self._highlight_tile(coord) 
 
-                    print(f"[SELECT TILE] tile selezionato: {coord}")
                     if hasattr(self.window(), "undo_stack") and self.pixmap_item:
                         save_state(
                             self.pixmap_item,
@@ -168,6 +170,6 @@ class GridGraphicsView(QGraphicsView, CtrlDragMixin):
     def wheelEvent(self, event):
         apply_zoom(self, event, zoom_in=1.15)
 
-        
+    
 
 

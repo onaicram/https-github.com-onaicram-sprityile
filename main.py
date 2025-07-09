@@ -162,7 +162,8 @@ class MainWindow(QMainWindow):
             pixmap = self.view.pixmap_item.pixmap().copy()
 
         self.atlas_manager = AtlasManagerWindow()
-        self.atlas_manager.load_image(pixmap)
+        if pixmap is not None:
+            self.atlas_manager.load_image(pixmap)
         self.atlas_manager.show()
 
 

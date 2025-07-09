@@ -1,6 +1,6 @@
 from PyQt5.QtWidgets import (QWidget, QPushButton, QHBoxLayout, QVBoxLayout, QMessageBox,
-                             QGraphicsScene, QLabel, QSpinBox, QSizePolicy, QGraphicsRectItem)
-from PyQt5.QtGui import QPixmap, QPen, QColor, QPainter
+                             QGraphicsScene, QLabel, QSpinBox, QSizePolicy, QGraphicsRectItem, QShortcut)
+from PyQt5.QtGui import QPixmap, QKeySequence, QPainter
 from PyQt5.QtCore import Qt, QRectF
 
 from utils.controls_utils import save_pixmap_dialog, ShiftDragRectSelectMixin, get_snapped_rect
@@ -8,7 +8,8 @@ from utils.graphics_utils import load_image_with_checker
 from utils.states_utils import save_state, undo_state, redo_state, reset_state
 from utils.grid_utils import draw_grid_ui
 from tile_splitter.tile_splitter import GridGraphicsView
-
+from tile_splitter.tile_splitter_executor import TileSplitterWidget
+from atlas.atlas_creator_widget import AtlasCreator 
 
 class AtlasManagerWindow(QWidget):
     def __init__(self):
@@ -23,6 +24,21 @@ class AtlasManagerWindow(QWidget):
         self.grid_tile_size = 16
         self.undo_stack = []
         self.redo_stack = []
+        self.grid_shortcut = QShortcut(QKeySequence("G"), self)
+        self.grid_shortcut.activated.connect(lambda: self.grid_button.click())
+
+        tile_extraction_button = QPushButton("Separa Tile")
+        tile_extraction_button.setFixedWidth(100)
+        tile_extraction_button.clicked.connect(self.open_tile_splitter)
+
+        atlas_creator_button = QPushButton("Crea Atlas")
+        atlas_creator_button.setFixedWidth(100)
+        atlas_creator_button.clicked.connect(self.open_atlas_creator)
+
+        top_bar_layout = QHBoxLayout()
+        top_bar_layout.addWidget(atlas_creator_button)
+        top_bar_layout.addWidget(tile_extraction_button)
+        top_bar_layout.setAlignment(Qt.AlignCenter)
 
         # Basic Buttons
         self.load_button = QPushButton("Carica")
@@ -76,39 +92,66 @@ class AtlasManagerWindow(QWidget):
 
         # Layout principale
         main_layout = QVBoxLayout()
+        main_layout.addLayout(top_bar_layout)
         main_layout.addWidget(self.view, stretch=1)
         main_layout.addLayout(grid_layout)
         main_layout.addLayout(button_layout)
         self.setLayout(main_layout)
 
+    def open_tile_splitter(self):
+        if not hasattr(self.view, "selected_coords") or not self.view.selected_coords:
+            QMessageBox.warning(self, "Errore", "Nessun tile selezionato.")
+            return
+
+        try:
+            tile_size = int(self.grid_size_field.text())
+        except ValueError:
+            QMessageBox.warning(self, "Errore", "Dimensione griglia non valida.")
+            return
+
+        # Salviamo l'istanza come attributo per evitare che venga distrutta
+        self.separator_window = TileSplitterWidget(
+            source_pixmap=self.original_pixmap,
+            selected_coords=self.view.selected_coords,
+            tile_size=tile_size
+        )
+        self.separator_window.show()
+
+    
+    def open_atlas_creator(self):
+        self.atlas_creator = AtlasCreator()
+        self.atlas_creator.show()
+
+
+
     def on_undo(self):
         undo_state(
-        self.view.pixmap_item,
-        self.view.selected_coords,
-        self.undo_stack,
-        self.redo_stack,
-        self.view.restore_selection
-    )
+            self.view.pixmap_item,
+            self.view.selected_coords,
+            self.undo_stack,
+            self.redo_stack,
+            self.view.restore_selection
+        )
         
 
     def on_redo(self):
         redo_state(
-        self.view.pixmap_item,
-        self.view.selected_coords,
-        self.undo_stack,
-        self.redo_stack,
-        self.view.restore_selection
-    )
+            self.view.pixmap_item,
+            self.view.selected_coords,
+            self.undo_stack,
+            self.redo_stack,
+            self.view.restore_selection
+        )
         
     def on_reset(self):
         reset_state(
-        self.view.pixmap_item,
-        self.original_pixmap,
-        self.view.selected_coords,
-        self.undo_stack,
-        self.redo_stack,
-        self.view.restore_selection
-    )
+            self.view.pixmap_item,
+            self.original_pixmap,
+            self.view.selected_coords,
+            self.undo_stack,
+            self.redo_stack,
+            self.view.restore_selection
+        )
 
         
 
@@ -127,8 +170,6 @@ class AtlasManagerWindow(QWidget):
         self.undo_stack.clear()
         self.redo_stack.clear()
 
-        print(f"[LOAD IMAGE] Pixmap caricato: {self.pixmap.pixmap().size()}")
-
         save_state(
             self.view.pixmap_item,
             self.view.selected_coords,
@@ -138,28 +179,55 @@ class AtlasManagerWindow(QWidget):
 
 
     def save_selection(self, rect: QRectF = None):
+        tile_size = self.grid_size_field.value()
+        source_pixmap = self.view.pixmap_item.pixmap()
+
+        selected_tiles = set(getattr(self.view, "selected_coords", set()))
+
+        # Se c'è un rettangolo, includi tutti i tile interni
         if rect is None:
             rect = getattr(self.view, "last_selection_rect", None)
 
-        if not isinstance(rect, QRectF):
+        if isinstance(rect, QRectF):
+            rect = get_snapped_rect(rect, tile_size)
+            left = int(rect.left()) // tile_size
+            top = int(rect.top()) // tile_size
+            right = int((rect.right() - 1)) // tile_size
+            bottom = int((rect.bottom() - 1)) // tile_size
+            for x in range(left, right + 1):
+                for y in range(top, bottom + 1):
+                    selected_tiles.add((x, y))
+
+        if not selected_tiles:
             QMessageBox.warning(self, "Errore", "Nessuna selezione disponibile.")
             return
 
-        if not self.view.pixmap_item:
-            return
+        # Calcola bounding box dei tile selezionati
+        min_x = min(x for x, _ in selected_tiles)
+        min_y = min(y for _, y in selected_tiles)
+        max_x = max(x for x, _ in selected_tiles)
+        max_y = max(y for _, y in selected_tiles)
 
-        # Allinea il rettangolo ai tile interi
-        rect = get_snapped_rect(rect, self.grid_size_field.value())
+        width = (max_x - min_x + 1) * tile_size
+        height = (max_y - min_y + 1) * tile_size
 
-        x = int(rect.left())
-        y = int(rect.top())
-        w = int(rect.width())
-        h = int(rect.height())
+        # Immagine finale trasparente
+        final_pixmap = QPixmap(width, height)
+        final_pixmap.fill(Qt.transparent)
 
-        source_pixmap = self.view.pixmap_item.pixmap()
-        selected_pixmap = source_pixmap.copy(x, y, w, h)
+        # Disegna solo i tile selezionati
+        painter = QPainter(final_pixmap)
+        for x, y in selected_tiles:
+            src_x = x * tile_size
+            src_y = y * tile_size
+            tile = source_pixmap.copy(src_x, src_y, tile_size, tile_size)
 
-        save_pixmap_dialog(self, selected_pixmap, "immagine")
+            dest_x = (x - min_x) * tile_size
+            dest_y = (y - min_y) * tile_size
+            painter.drawPixmap(dest_x, dest_y, tile)
+        painter.end()
+
+        save_pixmap_dialog(self, final_pixmap, "selezione_atlas")
 
 
     def save_image(self):
@@ -178,8 +246,6 @@ class AtlasGraphicsView(GridGraphicsView, ShiftDragRectSelectMixin):
         self.selection_rect_item: QGraphicsRectItem = None
         self.last_selection_rect: QRectF = QRectF()
         self.selected_coords = set()
-        self.setFocusPolicy(Qt.StrongFocus)
-        self.setFocus()
 
 
     def mousePressEvent(self, event):
@@ -197,7 +263,7 @@ class AtlasGraphicsView(GridGraphicsView, ShiftDragRectSelectMixin):
         self.handle_shift_release(event, self.scene(), self.select_tiles_in_rect)
         super().mouseReleaseEvent(event)
 
-
+    
     def keyPressEvent(self, event):
         if event.key() == Qt.Key_D:
             self.erase_selected_tiles()
@@ -206,9 +272,6 @@ class AtlasGraphicsView(GridGraphicsView, ShiftDragRectSelectMixin):
 
 
     def select_tiles_in_rect(self, rect: QRectF):
-
-        print(f"[SELECT RECT] Nuova selezione rettangolare: {rect}")
-
         self.last_selection_rect = rect
 
         for coord in list(self.selected_coords):
@@ -226,8 +289,6 @@ class AtlasGraphicsView(GridGraphicsView, ShiftDragRectSelectMixin):
                 if coord not in self.selected_coords:
                     self.selected_coords.add(coord)
                     self._highlight_tile(coord)
-
-        print(f"[SELECT RECT] Tiles selezionati: {self.selected_coords}")
 
         # Salva lo stato
         if hasattr(self.window(), "undo_stack") and self.pixmap_item:
