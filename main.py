@@ -87,15 +87,15 @@ class MainWindow(QMainWindow):
         self.color_label.setMaximumWidth(90)
 
         self.color_field = QLineEdit("Nessun colore")
-        self.color_field.setFixedWidth(80)
+        self.color_field.setFixedWidth(100)
         self.color_field.setReadOnly(True)
 
-        self.copy_button = QPushButton("Copia")
-        self.copy_button.setFixedWidth(80)
+        self.copy_button = QPushButton("Copia colore")
+        self.copy_button.setFixedWidth(100)
         self.copy_button.clicked.connect(self.copy_color)
 
         self.remove_color_button = QPushButton("Rimuovi colore")
-        self.remove_color_button.setFixedWidth(120)
+        self.remove_color_button.setFixedWidth(100)
         self.remove_color_button.clicked.connect(self.remove_selected_color)
 
         color_layout = QHBoxLayout()

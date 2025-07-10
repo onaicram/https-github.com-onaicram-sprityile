@@ -1,11 +1,12 @@
 import math
-from PyQt5.QtWidgets import (QDialog, QVBoxLayout, QLabel, QGraphicsView, QGraphicsScene, 
+from PyQt5.QtWidgets import (QDialog, QVBoxLayout, QLabel, QGraphicsView, QGraphicsScene, QFileDialog,
                              QWidget, QGraphicsPixmapItem, QPushButton, QHBoxLayout)
 from PyQt5.QtGui import QPixmap, QPainter, QColor, QImage
 from PyQt5.QtCore import Qt, QRectF
 
 from utils.controls_utils import CtrlDragMixin, apply_zoom
 from utils.grid_utils import GridOverlayItem
+from utils.controls_utils import save_pixmap_dialog
 
 class AtlasGeneratedWindow(QWidget):
     def __init__(self, tile_size, columns, rows, images_to_insert):
@@ -19,14 +20,19 @@ class AtlasGeneratedWindow(QWidget):
         self.images_to_insert = images_to_insert
         self.view = AtlasGeneratedView()
 
-        self.grid_button = QPushButton("Griglia")
+        self.grid_button = QPushButton("Attiva Griglia")
         self.grid_button.setCheckable(True)
         self.grid_button.setChecked(False)
         self.grid_button.setFixedWidth(100)
         self.grid_button.clicked.connect(self.toggle_grid)
 
+        self.save_atlas_button = QPushButton("Salva")
+        self.save_atlas_button.setFixedWidth(100)   
+        self.save_atlas_button.clicked.connect(self.save_atlas)
+
         self_button_layout = QHBoxLayout()
         self_button_layout.addWidget(self.grid_button)
+        self_button_layout.addWidget(self.save_atlas_button)
         self_button_layout.setAlignment(Qt.AlignCenter)
 
         self.layout = QVBoxLayout(self)
@@ -44,12 +50,23 @@ class AtlasGeneratedWindow(QWidget):
             self.grid_item = GridOverlayItem(width, height, self.tile_size)
             self.view.scene.addItem(self.grid_item)
             self.grid_item.setZValue(10)
+            self.grid_button.setText("Disattiva Griglia")
         else:
             if hasattr(self, "grid_item"):
                 self.view.scene.removeItem(self.grid_item)
                 del self.grid_item
+                self.grid_button.setText("Attiva Griglia")
 
-        
+    def save_atlas(self):
+        path, _ = QFileDialog.getSaveFileName(self, "Salva Atlas", "", "PNG Files (*.png)")
+        if path:
+            success = self.view.pixmap_item.pixmap().save(path, "PNG")
+            if not success:
+                print("Errore durante il salvataggio dell'atlas.")
+            else:
+                print(f"Atlas salvato con successo in {path}")
+
+
 
     def generate_checkerboard(self, tile_size, cols, rows):      
         width = tile_size * cols
@@ -124,7 +141,7 @@ class AtlasGeneratedView(QGraphicsView, CtrlDragMixin):
         self.pixmap_item = QGraphicsPixmapItem(pixmap)
         self.scene.addItem(self.pixmap_item)
 
-        self.setSceneRect(QRectF(pixmap.rect()))  # usa QRectF, non QRect!
+        self.setSceneRect(QRectF(pixmap.rect())) 
         self.centerOn(self.pixmap_item)
 
     def mousePressEvent(self, event):
