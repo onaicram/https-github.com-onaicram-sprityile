@@ -147,11 +147,9 @@ class MainWindow(QMainWindow):
 
 
     def open_tile_splitter(self):
-        if self.view.pixmap_item is None:
-            QMessageBox.warning(self, "Errore", "Nessuna immagine caricata.")
-            return
-
-        pixmap = self.view.pixmap_item.pixmap().copy()
+        pixmap = None
+        if self.view.pixmap_item and not self.view.pixmap_item.pixmap().isNull():
+            pixmap = self.view.pixmap_item.pixmap().copy()
 
         self.tile_splitter = TileSplitterWindow(pixmap)
         self.tile_splitter.show()

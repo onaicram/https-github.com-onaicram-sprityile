@@ -1,4 +1,4 @@
-from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QGraphicsScene, QGraphicsView,
+from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QGraphicsScene, QGraphicsView, QFileDialog,
                              QHBoxLayout, QPushButton, QLabel, QGraphicsPixmapItem, QMessageBox, QSpinBox, QShortcut)
 from PyQt5.QtGui import QPixmap, QPainter, QColor, QPen, QKeySequence
 from PyQt5.QtCore import Qt, QRectF
@@ -10,18 +10,18 @@ from utils.grid_utils import draw_grid_ui
 from utils.states_utils import save_state
 
 class TileSplitterWindow(QWidget):
-    def __init__(self, source_pixmap: QPixmap):
+    def __init__(self, source_pixmap: QPixmap= None):
         super().__init__()
         self.setWindowTitle("Gestione Tile")
-        self.source_pixmap = source_pixmap
         self.view = GridGraphicsView()
         self.view.setScene(QGraphicsScene())
-        self.view.pixmap_item = QGraphicsPixmapItem(self.source_pixmap)
-        self.view.pixmap_item.setZValue(5)
-        self.view.scene().addItem(self.view.pixmap_item)
-        self.view.setSceneRect(QRectF(self.source_pixmap.rect()))
-        self.view.centerOn(self.view.pixmap_item)
-        self.view.resetTransform()
+
+        if source_pixmap:
+            self.set_pixmap(source_pixmap)
+        else:
+            self.load_image()
+
+        
         self.resize(800, 600)  
         self.tile_size = 16
         self.grid_shortcut = QShortcut(QKeySequence("G"), self)
@@ -29,6 +29,10 @@ class TileSplitterWindow(QWidget):
         
         
         # Griglia UI
+        self.load_button  = QPushButton("Carica immagine")
+        self.load_button.setFixedWidth(100)
+        self.load_button.clicked.connect(self.load_image)
+        
         grid_label = QLabel("Dimensione Tile:")
         grid_label.setFixedWidth(80)
 
@@ -48,6 +52,7 @@ class TileSplitterWindow(QWidget):
         self.separator_button.clicked.connect(self.open_tile_splitter)
 
         grid_layout = QHBoxLayout()
+        grid_layout.addWidget(self.load_button)
         grid_layout.addWidget(grid_label)
         grid_layout.addWidget(self.grid_size_field)
         grid_layout.addWidget(self.grid_button)
@@ -60,10 +65,18 @@ class TileSplitterWindow(QWidget):
         layout.addLayout(grid_layout)
         self.setLayout(layout)
 
-        # Adattamento iniziale
-        auto_fit_view(self.view, self.source_pixmap)
         draw_checkerboard_for_view(self.view, self.tile_size)
 
+
+    def set_pixmap(self, pixmap: QPixmap):
+        self.source_pixmap = pixmap
+        self.view.pixmap_item = QGraphicsPixmapItem(self.source_pixmap)
+        self.view.pixmap_item.setZValue(5)
+        self.view.scene().addItem(self.view.pixmap_item)
+        self.view.setSceneRect(QRectF(self.source_pixmap.rect()))
+        self.view.centerOn(self.view.pixmap_item)
+        auto_fit_view(self.view, self.source_pixmap)
+        
 
     def open_tile_splitter(self):
         if not hasattr(self.view, "selected_coords") or not self.view.selected_coords:
@@ -83,6 +96,16 @@ class TileSplitterWindow(QWidget):
             tile_size=tile_size
         )
         self.separator_window.show()
+
+    
+    def load_image(self):
+        file, _ = QFileDialog.getOpenFileName(self, "Carica immagine", "", "Immagini (*.png *.jpg *.bmp)")
+        if file:
+            pixmap = QPixmap(file)
+            if not pixmap.isNull():
+                self.set_pixmap(pixmap)
+                
+                
 
 
 class GridGraphicsView(QGraphicsView, CtrlDragMixin):

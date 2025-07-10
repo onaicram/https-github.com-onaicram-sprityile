@@ -1,6 +1,6 @@
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QLineEdit, QMessageBox, QScrollArea, QFileDialog
+    QLineEdit, QMessageBox, QScrollArea, QFileDialog, QGridLayout
 )
 from PyQt5.QtGui import QPixmap, QPainter
 from PyQt5.QtCore import QRect, Qt, QSize
@@ -22,11 +22,10 @@ class TileSplitterWidget(QWidget):
         main_layout = QVBoxLayout()
         self.setLayout(main_layout)
 
-        # Anteprima dei tasselli selezionati
-        self.preview_layout = QHBoxLayout()
-        main_layout.addLayout(self.preview_layout)
-        self.preview_selected_tiles()
-
+        self.tile_layout = QGridLayout()
+        self.view_selected_tiles()
+        main_layout.addLayout(self.tile_layout)
+        
         controls_layout = QHBoxLayout()
         controls_layout.setAlignment(Qt.AlignCenter)
 
@@ -53,6 +52,9 @@ class TileSplitterWidget(QWidget):
         self.scroll_area.setMinimumHeight(150)
         main_layout.addWidget(self.scroll_area)
 
+        self.button_layout = QHBoxLayout()
+        self.button_layout.setAlignment(Qt.AlignCenter)
+
         # Pulsante salva
         self.save_button = QPushButton("Salva immagini")
         self.save_button.setFixedWidth(100)
@@ -64,20 +66,27 @@ class TileSplitterWidget(QWidget):
         self.load_button.setEnabled(False)
         self.load_button.clicked.connect(self.load_into_atlas)
 
-        main_layout.addWidget(self.save_button)
-        main_layout.addWidget(self.load_button)
+        self.button_layout.addWidget(self.save_button)
+        self.button_layout.addWidget(self.load_button)
 
-    def preview_selected_tiles(self):
+        main_layout.addLayout(self.button_layout)
+
+    def view_selected_tiles(self):
+        max_cols = 4
         tile_size = self.tile_size
-        scale = 6
-        for x, y in sorted(self.selected_coords):
+        scale = 4
+        for idx, (x, y) in enumerate(sorted(self.selected_coords)):
             rect = QRect(x * tile_size, y * tile_size, tile_size, tile_size)
             tile = self.source_pixmap.copy(rect)
             tile = tile.scaled(tile_size * scale, tile_size * scale, Qt.KeepAspectRatio)
             label = QLabel()
             label.setPixmap(tile)
             label.setFixedSize(tile.width() + 4, tile.height() + 4)
-            self.preview_layout.addWidget(label)
+            
+            row = idx // max_cols
+            col = idx % max_cols
+
+            self.tile_layout.addWidget(label, row, col)
 
     def handle_generate(self):
         try:
@@ -115,7 +124,7 @@ class TileSplitterWidget(QWidget):
     def load_into_atlas(self):
         
         atlas = AtlasCreator()
-        paths = [f"generated_{i}" for i in range(len(self.generated_images))]  # fake path
+        paths = [f"img_{i}" for i in range(len(self.generated_images))]
         atlas.view.show_images(self.generated_images, paths, start_idx=0)
         atlas.show()
 

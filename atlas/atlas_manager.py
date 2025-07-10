@@ -123,7 +123,6 @@ class AtlasManagerWindow(QWidget):
         self.atlas_creator.show()
 
 
-
     def on_undo(self):
         undo_state(
             self.view.pixmap_item,
@@ -164,18 +163,19 @@ class AtlasManagerWindow(QWidget):
             tile_size=16
         )
 
-        self.view.pixmap_item = self.pixmap
-        self.original_pixmap = self.view.pixmap_item.pixmap().copy()
-        self.view.setSceneRect(QRectF(self.pixmap.pixmap().rect()))
-        self.undo_stack.clear()
-        self.redo_stack.clear()
+        if self.pixmap:
+            self.view.pixmap_item = self.pixmap
+            self.original_pixmap = self.view.pixmap_item.pixmap().copy()
+            self.view.setSceneRect(QRectF(self.pixmap.pixmap().rect()))
+            self.undo_stack.clear()
+            self.redo_stack.clear()
 
-        save_state(
-            self.view.pixmap_item,
-            self.view.selected_coords,
-            self.undo_stack,
-            self.redo_stack
-        )
+            save_state(
+                self.view.pixmap_item,
+                self.view.selected_coords,
+                self.undo_stack,
+                self.redo_stack
+            )
 
 
     def save_selection(self, rect: QRectF = None):

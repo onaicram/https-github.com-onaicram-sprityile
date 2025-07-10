@@ -163,6 +163,14 @@ class AtlasCreator(QWidget):
         self.delete_button.setFixedWidth(100)
         self.delete_button.clicked.connect(self.delete_selected_images)
 
+        self.toggle_all_button = QPushButton("Seleziona tutte")
+        self.toggle_all_button.setCheckable(True)
+        self.toggle_all_button.setFixedWidth(100)
+        self.toggle_all_button.clicked.connect(self.toggle_all_images)
+
+        self.select_all_shortcut = QShortcut(QKeySequence("Ctrl+A"), self)
+        self.select_all_shortcut.activated.connect(lambda: self.toggle_all_button.click())
+
         self.generate_atlas_button = QPushButton("Genera Atlas")
         self.generate_atlas_button.setFixedWidth(100)
         self.generate_atlas_button.clicked.connect(self.open_generate_atlas)
@@ -195,11 +203,11 @@ class AtlasCreator(QWidget):
         btn_layout = QHBoxLayout()
         btn_layout.addWidget(self.load_button)
         btn_layout.addWidget(self.delete_button)
+        btn_layout.addWidget(self.toggle_all_button)
         btn_layout.setAlignment(Qt.AlignCenter)
 
         layout = QVBoxLayout()
         layout.addWidget(self.view)
-        #layout.addWidget(self.atlas_label)
         layout.addLayout(btn_layout)   
         layout.addLayout(controls_layout)
         self.setLayout(layout)
@@ -239,7 +247,6 @@ class AtlasCreator(QWidget):
                 to_remove.append(item)
 
         for item in to_remove:
-            
             self.view.scene.removeItem(item["group"])
             self.view.image_items.remove(item)
 
@@ -250,6 +257,21 @@ class AtlasCreator(QWidget):
                 self.view.selected_pixmaps.remove(item["pixmap"])
 
         self.view.relayout_images()
+
+
+    def toggle_all_images(self):
+        if self.toggle_all_button.isChecked():
+            for item in self.view.image_items:
+                item["highlight"].setVisible(True)
+                self.view.selected_pixmaps.add(item["pixmap"])
+
+            self.toggle_all_button.setText("Deseleziona Tutto")
+        else:
+            for item in self.view.image_items:
+                item["highlight"].setVisible(False)
+                self.view.selected_pixmaps.clear()
+
+            self.toggle_all_button.setText("Seleziona Tutto")
 
 
     def open_generate_atlas(self):
