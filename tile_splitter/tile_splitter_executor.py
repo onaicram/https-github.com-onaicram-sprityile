@@ -1,11 +1,9 @@
 from PyQt5.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QLineEdit, QMessageBox, QScrollArea
+    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
+    QLineEdit, QMessageBox, QScrollArea, QFileDialog
 )
 from PyQt5.QtGui import QPixmap, QPainter
 from PyQt5.QtCore import QRect, Qt, QSize
-
-from utils.controls_utils import save_pixmap_dialog
-
 
 class TileSplitterWidget(QWidget):
     def __init__(self, source_pixmap: QPixmap, selected_coords: set, tile_size: int):
@@ -14,7 +12,7 @@ class TileSplitterWidget(QWidget):
         self.source_pixmap = source_pixmap
         self.selected_coords = selected_coords
         self.tile_size = tile_size
-        self.generated_pixmap = None
+        self.generated_images = []
         self.resize(300, 400)
 
         # Layout principale
@@ -28,7 +26,7 @@ class TileSplitterWidget(QWidget):
 
         controls_layout = QHBoxLayout()
         controls_layout.setAlignment(Qt.AlignCenter)
-        
+
         self.repeat_label = QLabel("Numero Tile:")
         self.repeat_label.setFixedWidth(60)
 
@@ -36,37 +34,31 @@ class TileSplitterWidget(QWidget):
         self.repeat_field.setFixedWidth(40)
 
         self.generate_button = QPushButton("Genera")
-        self.generate_button.clicked.connect(self.generate_output)
+        self.generate_button.clicked.connect(self.handle_generate)
 
         controls_layout.addWidget(self.repeat_label)
         controls_layout.addWidget(self.repeat_field)
         controls_layout.addWidget(self.generate_button)
         main_layout.addLayout(controls_layout)
 
-        # Anteprima immagine generata
-        self.output_preview_label = QLabel(" Anteprima immagine generata")
-        self.output_preview_label.setAlignment(Qt.AlignCenter)
-
+        # Area anteprima immagini generate
         self.scroll_area = QScrollArea()
         self.scroll_area.setWidgetResizable(True)
-        self.scroll_area.setWidget(self.output_preview_label)
-        self.scroll_area.setMinimumHeight(150)  
-
+        self.preview_container = QWidget()
+        self.preview_layout_output = QVBoxLayout(self.preview_container)
+        self.scroll_area.setWidget(self.preview_container)
+        self.scroll_area.setMinimumHeight(150)
         main_layout.addWidget(self.scroll_area)
 
-        self.save_button = QPushButton("Salva immagine")
+        # Pulsante salva
+        self.save_button = QPushButton("Salva immagini")
         self.save_button.setEnabled(False)
-        self.save_button.clicked.connect(self.save_output)
-
-        self.save_layout = QHBoxLayout()
-        self.save_layout.addWidget(self.save_button)
-        self.save_layout.setAlignment(Qt.AlignCenter)
-        
-        main_layout.addLayout(self.save_layout)
+        self.save_button.clicked.connect(self.save_images)
+        main_layout.addWidget(self.save_button)
 
     def preview_selected_tiles(self):
         tile_size = self.tile_size
-        scale = 6 # fattore di scala
+        scale = 6
         for x, y in sorted(self.selected_coords):
             rect = QRect(x * tile_size, y * tile_size, tile_size, tile_size)
             tile = self.source_pixmap.copy(rect)
@@ -76,7 +68,7 @@ class TileSplitterWidget(QWidget):
             label.setFixedSize(tile.width() + 4, tile.height() + 4)
             self.preview_layout.addWidget(label)
 
-    def generate_output(self):
+    def handle_generate(self):
         try:
             repeat_count = int(self.repeat_field.text())
             if repeat_count <= 0:
@@ -85,36 +77,56 @@ class TileSplitterWidget(QWidget):
             QMessageBox.warning(self, "Errore", "Inserisci un numero valido di ripetizioni.")
             return
 
-        tile_size = self.tile_size
-        selected = sorted(self.selected_coords)
-        rows = 2 * len(selected) - 1
-        width = tile_size * repeat_count
-        height = tile_size * rows
-
-        output = QPixmap(width, height)
-        output.fill(Qt.transparent)  # trasparente o bianco
-
-        painter = QPainter(output)
-
-        for row, (x, y) in enumerate(selected):
-            tile = self.source_pixmap.copy(x * tile_size, y * tile_size, tile_size, tile_size)
-            for col in range(repeat_count):
-                x_pos = col * tile_size
-                y_pos = row * tile_size * 2
-                painter.drawPixmap(x_pos, y_pos, tile)
-        painter.end()
-        self.generated_pixmap = output
+        self.generated_images = self.generate_repeated_tile_images(repeat_count)
+        self.update_output_preview()
         self.save_button.setEnabled(True)
-        scale_factor = 2
-        size = QSize(output.width() * scale_factor, output.height() * scale_factor)
-        scaled_preview = output.scaled(
-            size,
-            Qt.KeepAspectRatio,
-            Qt.SmoothTransformation
-        )
-        self.output_preview_label.setPixmap(scaled_preview)
 
-    def save_output(self):
-        save_pixmap_dialog(self, self.generated_pixmap, "tasselli_generati")
-        
+    def generate_repeated_tile_images(self, repeat_count):
+        tile_size = self.tile_size
+        output_images = []
 
+        for x, y in sorted(self.selected_coords):
+            rect = QRect(x * tile_size, y * tile_size, tile_size, tile_size)
+            tile = self.source_pixmap.copy(rect)
+
+            width = tile_size * repeat_count
+            height = tile_size
+            result = QPixmap(width, height)
+            result.fill(Qt.transparent)
+
+            painter = QPainter(result)
+            for i in range(repeat_count):
+                painter.drawPixmap(i * tile_size, 0, tile)
+            painter.end()
+
+            output_images.append(result)
+
+        return output_images
+
+    def update_output_preview(self):
+        # Pulisce vecchie anteprime
+        for i in reversed(range(self.preview_layout_output.count())):
+            widget = self.preview_layout_output.itemAt(i).widget()
+            if widget:
+                widget.setParent(None)
+
+        scale = 2
+        for img in self.generated_images:
+            scaled = img.scaled(
+                img.width() * scale, img.height() * scale,
+                Qt.KeepAspectRatio, Qt.SmoothTransformation
+            )
+            label = QLabel()
+            label.setPixmap(scaled)
+            label.setAlignment(Qt.AlignCenter)
+            self.preview_layout_output.addWidget(label)
+
+    def save_images(self):
+        dir_path = QFileDialog.getExistingDirectory(self, "Seleziona cartella")
+        if not dir_path:
+            return
+
+        for i, pixmap in enumerate(self.generated_images):
+            pixmap.save(f"{dir_path}/tile_{i}.png", "PNG")
+
+        QMessageBox.information(self, "Salvato", "Immagini salvate con successo.")

@@ -1,9 +1,11 @@
 import math
-from PyQt5.QtWidgets import QDialog, QVBoxLayout, QLabel, QGraphicsView, QGraphicsScene, QWidget, QGraphicsPixmapItem
+from PyQt5.QtWidgets import (QDialog, QVBoxLayout, QLabel, QGraphicsView, QGraphicsScene, 
+                             QWidget, QGraphicsPixmapItem, QPushButton, QHBoxLayout)
 from PyQt5.QtGui import QPixmap, QPainter, QColor, QImage
 from PyQt5.QtCore import Qt, QRectF
 
 from utils.controls_utils import CtrlDragMixin, apply_zoom
+from utils.grid_utils import GridOverlayItem
 
 class AtlasGeneratedWindow(QWidget):
     def __init__(self, tile_size, columns, rows, images_to_insert):
@@ -15,13 +17,38 @@ class AtlasGeneratedWindow(QWidget):
         self.columns = columns
         self.rows = rows
         self.images_to_insert = images_to_insert
-
         self.view = AtlasGeneratedView()
+
+        self.grid_button = QPushButton("Griglia")
+        self.grid_button.setCheckable(True)
+        self.grid_button.setChecked(False)
+        self.grid_button.setFixedWidth(100)
+        self.grid_button.clicked.connect(self.toggle_grid)
+
+        self_button_layout = QHBoxLayout()
+        self_button_layout.addWidget(self.grid_button)
+        self_button_layout.setAlignment(Qt.AlignCenter)
+
         self.layout = QVBoxLayout(self)
         self.layout.addWidget(self.view)
+        self.layout.addLayout(self_button_layout)
         self.setLayout(self.layout)
 
         self.insert_images_into_atlas(tile_size, columns, rows, self.images_to_insert)
+
+    
+    def toggle_grid(self):
+        if self.grid_button.isChecked():
+            width = self.columns * self.tile_size
+            height = self.rows * self.tile_size
+            self.grid_item = GridOverlayItem(width, height, self.tile_size)
+            self.view.scene.addItem(self.grid_item)
+            self.grid_item.setZValue(10)
+        else:
+            if hasattr(self, "grid_item"):
+                self.view.scene.removeItem(self.grid_item)
+                del self.grid_item
+
         
 
     def generate_checkerboard(self, tile_size, cols, rows):      
@@ -95,11 +122,11 @@ class AtlasGeneratedView(QGraphicsView, CtrlDragMixin):
         self.image_item = None
 
     def set_pixmap(self, pixmap):
-        item = QGraphicsPixmapItem(pixmap)
-        self.scene.addItem(item)
+        self.pixmap_item = QGraphicsPixmapItem(pixmap)
+        self.scene.addItem(self.pixmap_item)
 
         self.setSceneRect(QRectF(pixmap.rect()))  # usa QRectF, non QRect!
-        self.centerOn(item)
+        self.centerOn(self.pixmap_item)
 
     def mousePressEvent(self, event):
         self.handle_drag_press(event)

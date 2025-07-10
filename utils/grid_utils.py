@@ -1,6 +1,28 @@
 from PyQt5.QtWidgets import QGraphicsItem, QMessageBox
 from PyQt5.QtGui import QColor, QPen
+from PyQt5.QtCore import QRectF, Qt
 from utils.graphics_utils import draw_checkerboard_for_view
+
+class GridOverlayItem(QGraphicsItem):
+    def __init__(self, width, height, tile_size):
+        super().__init__()
+        self.width = width
+        self.height = height
+        self.tile_size = tile_size
+
+    def boundingRect(self):
+        return QRectF(0, 0, self.width, self.height)
+
+    def paint(self, painter, option, widget=None):
+        pen = QPen(QColor(255, 100, 0, 255))
+        pen.setWidthF(0.0)
+        painter.setPen(pen)
+
+        for x in range(0, self.width, self.tile_size):
+            painter.drawLine(x, 0, x, self.height)
+
+        for y in range(0, self.height, self.tile_size):
+            painter.drawLine(0, y, self.width, y)
 
 
 def draw_grid_lines(scene, pixmap_width, pixmap_height, tile_size=16, z=10, color=QColor(255, 100, 0, 255)):
