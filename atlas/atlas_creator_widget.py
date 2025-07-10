@@ -1,11 +1,12 @@
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QGraphicsView,
-    QGraphicsScene, QGraphicsPixmapItem, QGraphicsRectItem, QGraphicsTextItem, QShortcut,
+    QGraphicsScene, QGraphicsPixmapItem, QGraphicsRectItem, QGraphicsTextItem, QShortcut, QLabel,QSpinBox,
     QFileDialog, QMessageBox
 )
 from PyQt5.QtGui import QPixmap, QPainter, QColor, QPen, QBrush, QFont, QTextOption, QKeySequence
 from PyQt5.QtCore import Qt
 
+from atlas.atlas_generated_window import AtlasGeneratedWindow
 from utils.controls_utils import CtrlDragMixin
 
 
@@ -89,14 +90,13 @@ class AtlasCreatorView(QGraphicsView, CtrlDragMixin):
             group["path"] = path
             group["group"] = group_item
             group["highlight"] = highlight
-
+            
             self.image_items.append(group)
 
             self.item_map[rect] = group
             self.item_map[img_item] = group
             self.item_map[text_item] = group
             self.item_map[group_item] = group
-
 
             x_offset += fixed_size + spacing
 
@@ -115,11 +115,9 @@ class AtlasCreatorView(QGraphicsView, CtrlDragMixin):
                     if pixmap in self.selected_pixmaps:
                         group['highlight'].setVisible(False)
                         self.selected_pixmaps.remove(pixmap)
-                        print(f"Deselezionato: {group['path'].split('/')[-1]}")
                     else:
                         group['highlight'].setVisible(True)
                         self.selected_pixmaps.add(pixmap)
-                        print(f"Selezionato: {group['path'].split('/')[-1]}")
                     return
 
         self.handle_drag_press(event)
@@ -158,15 +156,41 @@ class AtlasCreator(QWidget):
         self.view = AtlasCreatorView()
 
         self.load_button = QPushButton("Carica immagini")
-        self.load_button.setFixedWidth(120)
+        self.load_button.setFixedWidth(100)
         self.load_button.clicked.connect(self.load_images)
 
         self.delete_button = QPushButton("Elimina immagini")
-        self.delete_button.setFixedWidth(120)
+        self.delete_button.setFixedWidth(100)
         self.delete_button.clicked.connect(self.delete_selected_images)
+
+        self.generate_atlas_button = QPushButton("Genera Atlas")
+        self.generate_atlas_button.setFixedWidth(100)
+        self.generate_atlas_button.clicked.connect(self.open_generate_atlas)
 
         self.delete_shortcut = QShortcut(QKeySequence("D"), self)
         self.delete_shortcut.activated.connect(lambda: self.delete_button.click())
+
+        self.tile_size_spin = QSpinBox()
+        self.tile_size_spin.setRange(8, 256)
+        self.tile_size_spin.setValue(16)
+
+        self.cols_spin = QSpinBox()
+        self.cols_spin.setRange(1, 64)
+        self.cols_spin.setValue(60)
+
+        self.rows_spin = QSpinBox()
+        self.rows_spin.setRange(1, 64)
+        self.rows_spin.setValue(20)
+
+        # Label + layout
+        controls_layout = QHBoxLayout()
+        controls_layout.addWidget(QLabel("Tile size:"))
+        controls_layout.addWidget(self.tile_size_spin)
+        controls_layout.addWidget(QLabel("Cols:"))
+        controls_layout.addWidget(self.cols_spin)
+        controls_layout.addWidget(QLabel("Rows:"))
+        controls_layout.addWidget(self.rows_spin)
+        controls_layout.addWidget(self.generate_atlas_button)
 
         btn_layout = QHBoxLayout()
         btn_layout.addWidget(self.load_button)
@@ -175,7 +199,9 @@ class AtlasCreator(QWidget):
 
         layout = QVBoxLayout()
         layout.addWidget(self.view)
-        layout.addLayout(btn_layout)
+        #layout.addWidget(self.atlas_label)
+        layout.addLayout(btn_layout)   
+        layout.addLayout(controls_layout)
         self.setLayout(layout)
 
     def load_images(self):
@@ -220,6 +246,20 @@ class AtlasCreator(QWidget):
                 self.loaded_names.remove(item["path"])
 
         self.view.relayout_images()
+
+
+    def open_generate_atlas(self):
+
+        tile_size = self.tile_size_spin.value()
+        cols = self.cols_spin.value()
+        rows = self.rows_spin.value()
+
+        if hasattr(self, 'atlas_window') and self.atlas_window:
+            self.atlas_window.close()
+        pixmaps = list(self.view.selected_pixmaps)
+        self.generated_window = AtlasGeneratedWindow(tile_size, cols, rows, pixmaps)
+
+        self.generated_window.show()
 
     
 

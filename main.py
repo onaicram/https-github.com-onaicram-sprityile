@@ -9,11 +9,11 @@ from PyQt5.QtCore import Qt, pyqtSignal
 from tile_splitter.tile_splitter import TileSplitterWindow
 from atlas.atlas_manager import AtlasManagerWindow
 from utils.graphics_utils import load_image_with_checker
-from utils.controls_utils import save_pixmap_dialog, apply_zoom, BasicDragMixin
+from utils.controls_utils import save_pixmap_dialog, apply_zoom, CtrlDragMixin
 from utils.states_utils import save_state, undo_state, redo_state, reset_state
 
 
-class ImageViewer(QGraphicsView, BasicDragMixin):
+class ImageViewer(QGraphicsView, CtrlDragMixin):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Sprityle")

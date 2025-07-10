@@ -3,21 +3,6 @@ from PyQt5.QtCore import Qt, QRectF
 from PyQt5.QtGui import QPixmap, QColor, QPen
 
 
-class BasicDragMixin:
-    def handle_drag_press(self, event):
-        if event.button() == Qt.LeftButton:
-            self.setDragMode(QGraphicsView.ScrollHandDrag)
-
-    def handle_drag_move(self, event):
-        if self.dragMode() == QGraphicsView.ScrollHandDrag:
-            self.viewport().setCursor(Qt.ClosedHandCursor)
-
-    def handle_drag_release(self, event):
-        if event.button() in (Qt.LeftButton, Qt.RightButton):
-            self.setDragMode(QGraphicsView.NoDrag)
-            self.viewport().setCursor(Qt.ArrowCursor)
-
-
 class CtrlDragMixin:
     def handle_drag_press(self, event):
         if event.button() == Qt.LeftButton and (event.modifiers() & Qt.ControlModifier):
