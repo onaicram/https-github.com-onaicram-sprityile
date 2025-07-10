@@ -203,10 +203,11 @@ class MainWindow(QMainWindow):
             tile_size=tile_size 
         )
 
-        self.original_pixmap = self.view.pixmap_item.pixmap().copy()
-        self.undo_stack.clear()
-        self.redo_stack.clear()       
-        self.save_state()
+        if self.view.pixmap_item:
+            self.original_pixmap = self.view.pixmap_item.pixmap().copy()
+            self.undo_stack.clear()
+            self.redo_stack.clear()       
+            self.save_state()
 
     def save_image(self):
         if self.view.pixmap_item is None:

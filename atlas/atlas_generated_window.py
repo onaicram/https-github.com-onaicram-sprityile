@@ -78,7 +78,6 @@ class AtlasGeneratedWindow(QWidget):
     
     def insert_images_into_atlas(self, tile_size, cols, rows, pixmaps):
 
-       
         checkerboard = self.generate_checkerboard(tile_size, cols, rows)
 
         image = checkerboard.toImage()
@@ -96,13 +95,13 @@ class AtlasGeneratedWindow(QWidget):
 
             if current_x_tile + tiles_wide > cols:
                 current_x_tile = 2
-                current_y_tile += tiles_high
+                current_y_tile += tiles_high + 1
 
             x = current_x_tile * tile_size
             y = current_y_tile * tile_size
             painter.drawPixmap(x, y, pixmap)
 
-            current_x_tile += tiles_wide
+            current_x_tile += tiles_wide + 1
 
         painter.end()
 

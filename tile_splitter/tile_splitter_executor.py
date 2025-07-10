@@ -5,6 +5,8 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtGui import QPixmap, QPainter
 from PyQt5.QtCore import QRect, Qt, QSize
 
+from atlas.atlas_creator_widget import AtlasCreator
+
 class TileSplitterWidget(QWidget):
     def __init__(self, source_pixmap: QPixmap, selected_coords: set, tile_size: int):
         super().__init__()
@@ -13,6 +15,7 @@ class TileSplitterWidget(QWidget):
         self.selected_coords = selected_coords
         self.tile_size = tile_size
         self.generated_images = []
+
         self.resize(300, 400)
 
         # Layout principale
@@ -52,9 +55,17 @@ class TileSplitterWidget(QWidget):
 
         # Pulsante salva
         self.save_button = QPushButton("Salva immagini")
+        self.save_button.setFixedWidth(100)
         self.save_button.setEnabled(False)
         self.save_button.clicked.connect(self.save_images)
+
+        self.load_button = QPushButton("Carica in Atlas")
+        self.load_button.setFixedWidth(100)
+        self.load_button.setEnabled(False)
+        self.load_button.clicked.connect(self.load_into_atlas)
+
         main_layout.addWidget(self.save_button)
+        main_layout.addWidget(self.load_button)
 
     def preview_selected_tiles(self):
         tile_size = self.tile_size
@@ -77,34 +88,39 @@ class TileSplitterWidget(QWidget):
             QMessageBox.warning(self, "Errore", "Inserisci un numero valido di ripetizioni.")
             return
 
-        self.generated_images = self.generate_repeated_tile_images(repeat_count)
+        self.generated_images = self.generate_tile_images(repeat_count)
         self.update_output_preview()
         self.save_button.setEnabled(True)
 
-    def generate_repeated_tile_images(self, repeat_count):
+    def generate_tile_images(self, repeat_count):
+        
         tile_size = self.tile_size
-        output_images = []
+        selected = sorted(self.selected_coords)
+        self.generated_images = []  
 
-        for x, y in sorted(self.selected_coords):
-            rect = QRect(x * tile_size, y * tile_size, tile_size, tile_size)
-            tile = self.source_pixmap.copy(rect)
-
-            width = tile_size * repeat_count
-            height = tile_size
-            result = QPixmap(width, height)
+        for x, y in selected:
+            tile = self.source_pixmap.copy(x * tile_size, y * tile_size, tile_size, tile_size)
+            result = QPixmap(tile_size * repeat_count, tile_size)
             result.fill(Qt.transparent)
-
             painter = QPainter(result)
             for i in range(repeat_count):
                 painter.drawPixmap(i * tile_size, 0, tile)
             painter.end()
+            self.generated_images.append(result)
 
-            output_images.append(result)
-
-        return output_images
+        self.load_button.setEnabled(True)
+        self.save_button.setEnabled(True)
+        return self.generated_images
+    
+    def load_into_atlas(self):
+        
+        atlas = AtlasCreator()
+        paths = [f"generated_{i}" for i in range(len(self.generated_images))]  # fake path
+        atlas.view.show_images(self.generated_images, paths, start_idx=0)
+        atlas.show()
 
     def update_output_preview(self):
-        # Pulisce vecchie anteprime
+        
         for i in reversed(range(self.preview_layout_output.count())):
             widget = self.preview_layout_output.itemAt(i).widget()
             if widget:
