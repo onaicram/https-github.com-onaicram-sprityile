@@ -95,7 +95,6 @@ class AtlasGeneratedView(QGraphicsView, CtrlDragMixin):
         self.image_item = None
 
     def set_pixmap(self, pixmap):
-        print("DEBUG: set_pixmap called")
         item = QGraphicsPixmapItem(pixmap)
         self.scene.addItem(item)
 

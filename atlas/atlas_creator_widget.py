@@ -239,11 +239,15 @@ class AtlasCreator(QWidget):
                 to_remove.append(item)
 
         for item in to_remove:
-            print(f"Rimuovo: {item['path']}")
+            
             self.view.scene.removeItem(item["group"])
             self.view.image_items.remove(item)
+
             if item["path"] in self.loaded_names:
                 self.loaded_names.remove(item["path"])
+
+            if item["pixmap"] in self.view.selected_pixmaps:
+                self.view.selected_pixmaps.remove(item["pixmap"])
 
         self.view.relayout_images()
 
