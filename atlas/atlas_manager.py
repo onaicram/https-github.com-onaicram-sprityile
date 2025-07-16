@@ -3,16 +3,17 @@ from PyQt5.QtWidgets import (QWidget, QPushButton, QHBoxLayout, QVBoxLayout, QMe
 from PyQt5.QtGui import QPixmap, QKeySequence, QPainter
 from PyQt5.QtCore import Qt, QRectF
 
-from utils.controls_utils import save_pixmap_dialog, ShiftDragRectSelectMixin, get_snapped_rect
+from utils.controls_utils import save_pixmap_dialog, ShiftDragRectSelectMixin, get_snapped_rect, is_atlas_file
 from utils.graphics_utils import load_image_with_checker
 from utils.states_utils import save_state, undo_state, redo_state, reset_state
 from utils.grid_utils import draw_grid_ui
 from tile_splitter.tile_splitter import GridGraphicsView
 from tile_splitter.tile_splitter_executor import TileSplitterWidget
 from atlas.atlas_creator_widget import AtlasCreator 
+from utils.meta_utils import MetaUtils
 
 class AtlasManagerWindow(QWidget):
-    def __init__(self):
+    def __init__(self, edit_mode=False):
         super().__init__()
         self.setWindowTitle("Gestione Atlas")
         self.setMinimumSize(900, 700)
@@ -20,6 +21,7 @@ class AtlasManagerWindow(QWidget):
         self.view.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self.scene = QGraphicsScene(self)
         self.view.setScene(self.scene)
+        self.edit_mode = edit_mode
         self.grid_visible = True
         self.grid_tile_size = 16
         self.undo_stack = []
@@ -27,16 +29,19 @@ class AtlasManagerWindow(QWidget):
         self.grid_shortcut = QShortcut(QKeySequence("G"), self)
         self.grid_shortcut.activated.connect(lambda: self.grid_button.click())
 
+        self.mode_label = QLabel("🟢 MODIFICA" if self.edit_mode else "⚪ NUOVO")
+        self.mode_label.setAlignment(Qt.AlignCenter)
+
         tile_extraction_button = QPushButton("Separa Tile")
         tile_extraction_button.setFixedWidth(100)
         tile_extraction_button.clicked.connect(self.open_tile_splitter)
 
-        atlas_creator_button = QPushButton("Crea Atlas")
-        atlas_creator_button.setFixedWidth(100)
-        atlas_creator_button.clicked.connect(self.open_atlas_creator)
+        self.atlas_creator_button = QPushButton("Crea Atlas")
+        self.atlas_creator_button.setFixedWidth(100)
+        self.atlas_creator_button.clicked.connect(self.open_atlas_creator)
 
         top_bar_layout = QHBoxLayout()
-        top_bar_layout.addWidget(atlas_creator_button)
+        top_bar_layout.addWidget(self.atlas_creator_button)
         top_bar_layout.addWidget(tile_extraction_button)
         top_bar_layout.setAlignment(Qt.AlignCenter)
 
@@ -92,6 +97,7 @@ class AtlasManagerWindow(QWidget):
 
         # Layout principale
         main_layout = QVBoxLayout()
+        main_layout.addWidget(self.mode_label)
         main_layout.addLayout(top_bar_layout)
         main_layout.addWidget(self.view, stretch=1)
         main_layout.addLayout(grid_layout)
@@ -119,7 +125,23 @@ class AtlasManagerWindow(QWidget):
 
     
     def open_atlas_creator(self):
-        self.atlas_creator = AtlasCreator()
+        atlas_name = ""
+        path = None
+        
+        if hasattr(self, "pixmap") and self.pixmap:
+            path = getattr(self.pixmap, "path", None)
+            if path and is_atlas_file(path):
+                atlas_name = path.split("/")[-1]
+
+        self.atlas_creator = AtlasCreator(edit_mode=self.edit_mode, atlas_name=atlas_name, atlas_path=path)
+        self.atlas_creator.edit_mode = self.edit_mode
+
+        if hasattr(self, "pixmap") and self.pixmap:
+            path = getattr(self.pixmap, "path", None)
+            if path:
+                pixmap = self.pixmap.pixmap()
+                self.atlas_creator.load_images_from_pixmaps_and_paths([pixmap], [path])
+
         self.atlas_creator.show()
 
 
@@ -163,6 +185,7 @@ class AtlasManagerWindow(QWidget):
             tile_size=16
         )
 
+
         if self.pixmap:
             self.view.pixmap_item = self.pixmap
             self.original_pixmap = self.view.pixmap_item.pixmap().copy()
@@ -176,6 +199,22 @@ class AtlasManagerWindow(QWidget):
                 self.undo_stack,
                 self.redo_stack
             )
+
+            if hasattr(self.pixmap, "path"):
+
+                # se l'img caricata ha prefisso 
+                self.edit_mode = is_atlas_file(self.pixmap.path)
+
+                # modalità Edit attiva
+                if is_atlas_file(self.pixmap.path):
+                    self.atlas_creator_button.setText("Modifica Atlas")
+                    self.mode_label.setText("🟢 MODIFICA")
+                else:
+                    self.atlas_creator_button.setText("Crea Atlas")
+                    self.mode_label.setText("⚪ NUOVO")
+                 
+            else:
+                self.pixmap.path = getattr(self.view.pixmap_item, "path", None)
 
 
     def save_selection(self, rect: QRectF = None):
@@ -229,13 +268,27 @@ class AtlasManagerWindow(QWidget):
 
         save_pixmap_dialog(self, final_pixmap, "selezione_atlas")
 
-
+    
     def save_image(self):
         if self.view.pixmap_item is None:
             return
-        
+
         pixmap = self.view.pixmap_item.pixmap()
-        save_pixmap_dialog(self, pixmap, "immagine")
+        path = save_pixmap_dialog(self, pixmap, "immagine")
+        if not path:
+            return
+
+        # Recupera i dati da UI
+        tile_size = self.grid_size_field.value()
+
+        MetaUtils.save_meta(
+            path, 
+            tile_size, 
+            editable=True
+        )
+
+        QMessageBox.information(self, "Salvato", "Meta salvato con successo.")
+
 
 
 class AtlasGraphicsView(GridGraphicsView, ShiftDragRectSelectMixin):

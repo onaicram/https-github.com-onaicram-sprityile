@@ -3,9 +3,12 @@ from PyQt5.QtWidgets import (
     QLineEdit, QMessageBox, QScrollArea, QFileDialog, QGridLayout
 )
 from PyQt5.QtGui import QPixmap, QPainter
-from PyQt5.QtCore import QRect, Qt, QSize
+from PyQt5.QtCore import QRect, Qt
 
 from atlas.atlas_creator_widget import AtlasCreator
+from utils.meta_utils import MetaUtils
+from datetime import datetime
+import os
 
 class TileSplitterWidget(QWidget):
     def __init__(self, source_pixmap: QPixmap, selected_coords: set, tile_size: int):
@@ -152,6 +155,14 @@ class TileSplitterWidget(QWidget):
             return
 
         for i, pixmap in enumerate(self.generated_images):
-            pixmap.save(f"{dir_path}/tile_{i}.png", "PNG")
-
+            filename = self.get_unique_tile_name()
+            full_path = os.path.join(dir_path, filename)
+            pixmap.save(full_path, "PNG")
+            MetaUtils.save_meta(
+                full_path, self.tile_size, editable=True
+            )
         QMessageBox.information(self, "Salvato", "Immagini salvate con successo.")
+
+    def get_unique_tile_name(self, prefix="tile"):
+        ms_timestamp = int(datetime.now().timestamp() * 1000)
+        return f"{prefix}_{ms_timestamp}.png"
