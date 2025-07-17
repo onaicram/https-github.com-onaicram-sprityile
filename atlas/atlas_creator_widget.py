@@ -1,5 +1,5 @@
 from PyQt5.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QGraphicsView,
+    QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QGraphicsView, QGraphicsItem,
     QGraphicsScene, QGraphicsPixmapItem, QGraphicsRectItem, QGraphicsTextItem, QShortcut, QLabel,QSpinBox,
     QFileDialog, QMessageBox
 )
@@ -7,7 +7,8 @@ from PyQt5.QtGui import QPixmap, QPainter, QColor, QPen, QBrush, QFont, QTextOpt
 from PyQt5.QtCore import Qt
 
 from atlas.atlas_generated_window import AtlasGeneratedWindow
-from utils.controls_utils import CtrlDragMixin
+from utils.controls_utils import CtrlDragMixin, is_atlas_file
+from utils.meta_utils import MetaUtils
 
 
 class AtlasCreatorView(QGraphicsView, CtrlDragMixin):
@@ -35,7 +36,7 @@ class AtlasCreatorView(QGraphicsView, CtrlDragMixin):
         super().mouseReleaseEvent(event)
 
     def show_images(self, images, paths, start_idx):
-        spacing = 16
+        spacing = 40
         fixed_size = self.tile_size
 
         if not hasattr(self, "last_offset"):
@@ -46,6 +47,8 @@ class AtlasCreatorView(QGraphicsView, CtrlDragMixin):
         for idx, (pixmap, path) in enumerate(zip(images, paths), start=start_idx):
             name = path.split("/")[-1]
             group = {}
+            group.setFlag(QGraphicsItem.ItemIsMovable, True)
+
 
             # --- Riquadro base
             rect = QGraphicsRectItem(0, 0, fixed_size, fixed_size)
@@ -68,7 +71,7 @@ class AtlasCreatorView(QGraphicsView, CtrlDragMixin):
             text_option = QTextOption(Qt.AlignCenter)
             text_item.document().setDefaultTextOption(text_option)
             text_item.setDefaultTextColor(Qt.darkGray)
-            text_item.setPos(0, self.tile_size + 2)
+            text_item.setPos((fixed_size - text_item.boundingRect().width()) / 2, self.tile_size + 2)
             text_item.setZValue(2)
 
             # --- Gruppo
@@ -143,19 +146,44 @@ class AtlasCreatorView(QGraphicsView, CtrlDragMixin):
         self.last_offset = x_offset
 
 
-
 class AtlasCreator(QWidget):
-    def __init__(self):
+    def __init__(self, edit_mode=False, atlas_name="", atlas_path=None, initial_image = None, parent=None):
         super().__init__()
-        self.setWindowTitle("Crea Atlas da Immagini")
+        self.edit_mode = edit_mode
+        self.setWindowTitle(self._get_window_title())
+        self.atlas_name = atlas_name if edit_mode else ""
+        self.atlas_path = atlas_path
+
         self.resize(600, 400)
 
         self.loaded_images = []
         self.loaded_names = []
 
-        self.view = AtlasCreatorView()
+        if initial_image:
+            pixmap = QPixmap(initial_image)
+            if not pixmap.isNull():
+                self.loaded_images.append(pixmap)
+                self.loaded_names.append(initial_image)
 
-        self.load_button = QPushButton("Carica immagini")
+        self.view = AtlasCreatorView()
+        self.init_ui() 
+
+    def _get_window_title(self):
+        if self.edit_mode:
+            return f"Modifica Atlas"
+        return "Crea Atlas da Immagini"
+    
+    def init_ui(self):
+
+        if self.edit_mode:
+            label_text = f"🟢 MODIFICA - {self.atlas_name}"
+        else:
+            label_text = "⚪ NUOVO"
+
+        self.mode_label = QLabel(label_text)
+        self.mode_label.setAlignment(Qt.AlignCenter)
+         
+        self.load_button = QPushButton()
         self.load_button.setFixedWidth(100)
         self.load_button.clicked.connect(self.load_images)
 
@@ -171,9 +199,16 @@ class AtlasCreator(QWidget):
         self.select_all_shortcut = QShortcut(QKeySequence("Ctrl+A"), self)
         self.select_all_shortcut.activated.connect(lambda: self.toggle_all_button.click())
 
-        self.generate_atlas_button = QPushButton("Genera Atlas")
+        self.generate_atlas_button = QPushButton()
         self.generate_atlas_button.setFixedWidth(100)
         self.generate_atlas_button.clicked.connect(self.open_generate_atlas)
+
+        if self.edit_mode:
+            self.load_button.setText("Aggiungi immagini")
+            self.generate_atlas_button.setText("Aggiorna Atlas")
+        else:
+            self.load_button.setText("Carica immagini")
+            self.generate_atlas_button.setText("Genera Atlas")
 
         self.delete_shortcut = QShortcut(QKeySequence("D"), self)
         self.delete_shortcut.activated.connect(lambda: self.delete_button.click())
@@ -207,37 +242,31 @@ class AtlasCreator(QWidget):
         btn_layout.setAlignment(Qt.AlignCenter)
 
         layout = QVBoxLayout()
+        layout.addWidget(self.mode_label)
         layout.addWidget(self.view)
         layout.addLayout(btn_layout)   
         layout.addLayout(controls_layout)
         self.setLayout(layout)
 
+
     def load_images(self):
+        pixmaps = []
         files, _ = QFileDialog.getOpenFileNames(self, "Seleziona immagini", "", "Immagini (*.png *.jpg *.jpeg *.bmp)")
         if not files:
             return
-
-        new_images = []
-        new_paths = []
-
-        for file_path in files:
-            if file_path in self.loaded_names:
+        
+        for file in files:
+            if file in self.loaded_names:
+                QMessageBox.warning(self, "Errore", f"L'immagine '{file}' è già stata caricata.")
                 continue
+            if is_atlas_file(file):
+                QMessageBox.warning(self, "Non consentito", f"Non è possibile caricare file atlas.\n{file}")
+                continue
+            pixmap = QPixmap(file)
+            pixmaps.append(pixmap)
 
-            pixmap = QPixmap(file_path)
-            if pixmap.isNull():
-                QMessageBox.warning(self, "Errore", f"Immagine non valida:\n{file_path}")
-            else:
-                new_images.append(pixmap)
-                new_paths.append(file_path)
+        self.load_images_from_pixmaps_and_paths(pixmaps, files)
 
-        if not new_images:
-            return
-
-        start_idx = len(self.loaded_images)
-        self.loaded_images.extend(new_images)
-        self.loaded_names.extend(new_paths)
-        self.view.show_images(new_images, new_paths, start_idx)
 
     def delete_selected_images(self): 
         to_remove = []
@@ -282,10 +311,65 @@ class AtlasCreator(QWidget):
 
         if hasattr(self, 'atlas_window') and self.atlas_window:
             self.atlas_window.close()
+
         pixmaps = list(self.view.selected_pixmaps)
-        self.generated_window = AtlasGeneratedWindow(tile_size, cols, rows, pixmaps)
+
+        if self.edit_mode:
+            meta = MetaUtils.load_meta(self.atlas_path)
+            end_tile = meta.get("end_tile", [2, 2]) if meta else [2, 2]
+            self.generated_window = AtlasGeneratedWindow(
+                tile_size, cols, rows, images_to_insert=pixmaps, 
+                edit_mdode=True, base_atlas=self.atlas_path, 
+                end_tile=end_tile
+            )
+        else:
+            self.generated_window = AtlasGeneratedWindow(
+                tile_size, cols, rows,
+                images_to_insert=pixmaps,
+                edit_mdode=False
+            )
 
         self.generated_window.show()
+
+    def load_images_from_pixmaps_and_paths(self, pixmaps, paths):
+
+        tile_size = self.tile_size_spin.value()
+
+        if not pixmaps or not paths or len(pixmaps) != len(paths):
+            return
+
+        new_images = []
+        new_paths = []
+
+        for pixmap, path in zip(pixmaps, paths):
+            if path in self.loaded_names:
+                continue
+            if pixmap.isNull():
+                continue
+            if is_atlas_file(path):
+                continue
+
+            new_images.append(pixmap)
+            new_paths.append(path)
+
+        if not new_images:
+            return
+
+        if self.edit_mode and self.atlas_path:
+            meta = MetaUtils.load_meta(self.atlas_path)
+            end_tile = meta.get("end_tile", [2, 2]) 
+            x_tile = end_tile[0]
+            spacing = 16
+            self.view.last_offset = x_tile * tile_size + spacing
+        else:
+            self.view.last_offset = 0
+
+        # --- Carica immagini ---
+        start_idx = len(self.loaded_images)
+        self.loaded_images.extend(new_images)
+        self.loaded_names.extend(new_paths)
+        self.view.show_images(new_images, new_paths, start_idx)
+
 
     
 

@@ -65,29 +65,40 @@ def auto_fit_view(view, pixmap_or_pixitem, margin_ratio=0.9):
 
 
 def load_image_with_checker(view, scene, pixmap: Optional[QPixmap] = None, parent=None, tile_size=16) -> Optional[QGraphicsPixmapItem]:
+    pixmap_item = None
+    file_path = None
+
+    # Caso 1: Caricamento da file system
     if pixmap is None:
         file_path, _ = QFileDialog.getOpenFileName(parent, "Apri immagine", "", "Immagini (*.png *.jpg *.bmp)")
         if not file_path:
             return None
         pixmap = QPixmap(file_path)
 
+    # Caso 2-3: Se il QPixmap arriva già pronto, proviamo ad ereditare il path
+    if hasattr(pixmap, "path"):
+        file_path = pixmap.path
+
     if pixmap.isNull():
         if parent:
             QMessageBox.warning(parent, "Errore", "Immagine non valida.")
         return None
 
-    scene.clear()
+    # Creazione pixmap_item e assegnazione del path
+    pixmap_item = QGraphicsPixmapItem(pixmap)
+    pixmap_item.setZValue(1)
+    pixmap_item.path = file_path
 
+    # Clear + checker
+    scene.clear()
     checker = draw_checkerboard_pixmap(pixmap.width(), pixmap.height(), tile_size)
     checker_item = QGraphicsPixmapItem(checker)
     checker_item.setZValue(0)
     scene.addItem(checker_item)
-
-    pixmap_item = QGraphicsPixmapItem(pixmap)
-    pixmap_item.setZValue(1)
     scene.addItem(pixmap_item)
 
     view.setSceneRect(QRectF(pixmap.rect()))
     auto_fit_view(view, pixmap_item)
 
     return pixmap_item
+

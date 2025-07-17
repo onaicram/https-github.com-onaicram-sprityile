@@ -9,8 +9,9 @@ from PyQt5.QtCore import Qt, pyqtSignal
 from tile_splitter.tile_splitter import TileSplitterWindow
 from atlas.atlas_manager import AtlasManagerWindow
 from utils.graphics_utils import load_image_with_checker
-from utils.controls_utils import save_pixmap_dialog, apply_zoom, CtrlDragMixin
+from utils.controls_utils import save_pixmap_dialog, apply_zoom, CtrlDragMixin,is_atlas_file
 from utils.states_utils import save_state, undo_state, redo_state, reset_state
+from utils.meta_utils import MetaUtils
 
 
 class ImageViewer(QGraphicsView, CtrlDragMixin):
@@ -157,9 +158,10 @@ class MainWindow(QMainWindow):
     def open_atlas_manager(self):
         pixmap = None
         if self.view.pixmap_item and not self.view.pixmap_item.pixmap().isNull():
-            pixmap = self.view.pixmap_item.pixmap().copy()
-
-        self.atlas_manager = AtlasManagerWindow()
+            pixmap_item = self.view.pixmap_item
+            pixmap = pixmap_item.pixmap()
+            pixmap.path = getattr(pixmap_item, "path", None)
+        self.atlas_manager = AtlasManagerWindow(edit_mode=is_atlas_file(pixmap.path) if pixmap and hasattr(pixmap, "path") else False)
         if pixmap is not None:
             self.atlas_manager.load_image(pixmap)
         self.atlas_manager.show()
@@ -212,8 +214,13 @@ class MainWindow(QMainWindow):
             return
         
         pixmap = self.view.pixmap_item.pixmap()
-        save_pixmap_dialog(self, pixmap, "immagine")
+        path = save_pixmap_dialog(self, pixmap, "immagine")
+        if path:
+           MetaUtils.save_meta(
+                path, self.current_tile_size, editable=True
+            )
             
+ 
 
     def reset_image(self):
         reset_state(

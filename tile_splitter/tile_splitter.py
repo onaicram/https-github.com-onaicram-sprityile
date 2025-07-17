@@ -105,8 +105,6 @@ class TileSplitterWindow(QWidget):
             if not pixmap.isNull():
                 self.set_pixmap(pixmap)
                 
-                
-
 
 class GridGraphicsView(QGraphicsView, CtrlDragMixin):
     def __init__(self):

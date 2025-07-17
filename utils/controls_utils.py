@@ -1,6 +1,7 @@
 from PyQt5.QtWidgets import QFileDialog, QGraphicsView, QMessageBox
 from PyQt5.QtCore import Qt, QRectF
 from PyQt5.QtGui import QPixmap, QColor, QPen
+import os
 
 
 class CtrlDragMixin:
@@ -81,7 +82,7 @@ def load_pixmap(parent, pixmap: QPixmap = None) -> QPixmap:
     return loaded_pixmap
 
 
-def save_pixmap_dialog(parent, pixmap: QPixmap, label="immagine"):
+def save_pixmap_dialog(parent, pixmap: QPixmap, label="img"):
     if not pixmap or pixmap.isNull():
         QMessageBox.warning(parent, "Errore", "Nessuna immagine da salvare.")
         return
@@ -95,6 +96,14 @@ def save_pixmap_dialog(parent, pixmap: QPixmap, label="immagine"):
     if file_path:
         pixmap.save(file_path)
         QMessageBox.information(parent, "Salvataggio completato", "Immagine salvata con successo.")
+        return file_path
+    return None
+
+def is_atlas_file(file_path: str) -> bool:
+    if not file_path:
+        return False
+    filename = os.path.basename(file_path).lower()
+    return filename.startswith("atlas_")
 
 
 
