@@ -1,5 +1,5 @@
 from PyQt5.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QGraphicsView,
+    QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QGraphicsView, QGraphicsItem,
     QGraphicsScene, QGraphicsPixmapItem, QGraphicsRectItem, QGraphicsTextItem, QShortcut, QLabel,QSpinBox,
     QFileDialog, QMessageBox
 )
@@ -47,6 +47,8 @@ class AtlasCreatorView(QGraphicsView, CtrlDragMixin):
         for idx, (pixmap, path) in enumerate(zip(images, paths), start=start_idx):
             name = path.split("/")[-1]
             group = {}
+            group.setFlag(QGraphicsItem.ItemIsMovable, True)
+
 
             # --- Riquadro base
             rect = QGraphicsRectItem(0, 0, fixed_size, fixed_size)
