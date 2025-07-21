@@ -1,6 +1,9 @@
-from PyQt5.QtWidgets import QFileDialog, QGraphicsView, QMessageBox
+from PyQt5.QtWidgets import QFileDialog, QGraphicsView, QMessageBox, QGraphicsRectItem, QGraphicsPixmapItem
 from PyQt5.QtCore import Qt, QRectF
 from PyQt5.QtGui import QPixmap, QColor, QPen
+
+from utils.graphics_utils import create_pixel_preview
+
 import os
 
 

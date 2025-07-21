@@ -47,9 +47,7 @@ class AtlasCreatorView(QGraphicsView, CtrlDragMixin):
         for idx, (pixmap, path) in enumerate(zip(images, paths), start=start_idx):
             name = path.split("/")[-1]
             group = {}
-            group.setFlag(QGraphicsItem.ItemIsMovable, True)
-
-
+            
             # --- Riquadro base
             rect = QGraphicsRectItem(0, 0, fixed_size, fixed_size)
             rect.setBrush(QBrush(QColor(250, 250, 250)))

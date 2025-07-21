@@ -399,9 +399,7 @@ class AtlasGraphicsView(GridGraphicsView, ShiftDragRectSelectMixin):
         # Bounding box della selezione corrente
         min_x = min(x for x, _ in self.selected_coords)
         min_y = min(y for _, y in self.selected_coords)
-        width = max(x for x, _ in self.selected_coords) - min_x + 1
-        height = max(y for _, y in self.selected_coords) - min_y + 1
-
+       
         # Calcolo offset reale
         offset_x = target_tile_x - min_x
         offset_y = target_tile_y - min_y

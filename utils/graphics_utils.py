@@ -1,6 +1,7 @@
 from PyQt5.QtWidgets import QFileDialog, QGraphicsPixmapItem, QMessageBox, QGraphicsView, QGraphicsScene
-from PyQt5.QtGui import QPixmap, QColor, QPainter, QBrush
+from PyQt5.QtGui import QPixmap, QColor, QPainter, QImage
 from PyQt5.QtCore import QRectF
+from PyQt5.QtCore import Qt
 from typing import Optional
 
 def draw_checkerboard_for_view(view, tile_size: int):
@@ -101,4 +102,28 @@ def load_image_with_checker(view, scene, pixmap: Optional[QPixmap] = None, paren
     auto_fit_view(view, pixmap_item)
 
     return pixmap_item
+
+
+def create_pixel_preview(pixmap: QPixmap, selected_pixels: set) -> QPixmap:
+    if not selected_pixels:
+        return QPixmap()
+
+    min_x = min(x for x, _ in selected_pixels)
+    min_y = min(y for _, y in selected_pixels)
+    max_x = max(x for x, _ in selected_pixels)
+    max_y = max(y for _, y in selected_pixels)
+
+    width = max_x - min_x + 1
+    height = max_y - min_y + 1
+
+    image = QImage(width, height, QImage.Format_ARGB32)
+    image.fill(Qt.transparent)
+
+    source_iamge = pixmap.toImage()
+
+    for x, y in selected_pixels:
+        color = source_iamge.pixelColor(x, y)
+        image.setPixelColor(x - min_x, y - min_y, color)
+
+    return QPixmap.fromImage(image)
 

@@ -1,15 +1,15 @@
 import sys
 from PyQt5.QtWidgets import (
-    QApplication, QGraphicsView, QGraphicsScene,
+    QApplication, QGraphicsView, QGraphicsScene, 
     QMainWindow, QWidget, QPushButton, QVBoxLayout, QLabel, QLineEdit, QHBoxLayout, QMessageBox
 )
-from PyQt5.QtGui import QPixmap, QPainter, QColor, QImage
-from PyQt5.QtCore import Qt, pyqtSignal
+from PyQt5.QtGui import QPixmap, QPainter, QColor, QImage, QPen
+from PyQt5.QtCore import Qt, pyqtSignal, QRectF
 
 from tile_splitter.tile_splitter import TileSplitterWindow
 from atlas.atlas_manager import AtlasManagerWindow
 from utils.graphics_utils import load_image_with_checker
-from utils.controls_utils import save_pixmap_dialog, apply_zoom, CtrlDragMixin,is_atlas_file
+from utils.controls_utils import save_pixmap_dialog, apply_zoom, CtrlDragMixin, is_atlas_file, create_pixel_preview
 from utils.states_utils import save_state, undo_state, redo_state, reset_state
 from utils.meta_utils import MetaUtils
 
@@ -26,31 +26,184 @@ class ImageViewer(QGraphicsView, CtrlDragMixin):
         self.setBackgroundBrush(QColor(220, 220, 220))  # Grigio chiaro uniforme
         self.checker_item = None
 
+        self.selected_pixels = set()
+        self.drag_selecting = False
+        self.alt_drag_active = False
+        self.selection_rect_item = None
+        self.drag_preview_item = None
+        self._drag_origin = (0, 0)
+        self._drag_offset = (0, 0)
+        self.selection_overlay_item = None
+
     color_picked = pyqtSignal(str)
 
     def mousePressEvent(self, event):
         if self.pixmap_item is None:
             return
+        
+        if event.modifiers() & Qt.ControlModifier:
+            self.handle_drag_press(event)
+            super().mousePressEvent(event)
+            return
 
         pos = self.mapToScene(event.pos())
         x, y = int(pos.x()), int(pos.y())
 
+        # 1. Emit colore (funzione già esistente)
         if 0 <= x < self.pixmap_item.pixmap().width() and 0 <= y < self.pixmap_item.pixmap().height():
             image = self.pixmap_item.pixmap().toImage()
             color = image.pixelColor(x, y)
             hex_color = color.name().upper()
             self.color_picked.emit(hex_color)
 
-        self.handle_drag_press(event)
+        # 2. Shift = inizia selezione rettangolare
+        if event.modifiers() & Qt.ShiftModifier:
+            self.drag_selecting = True
+            self.drag_start_pos = pos
+
+            if self.selection_rect_item:
+                self.scene.removeItem(self.selection_rect_item)
+            self.selection_rect_item = self.scene.addRect(QRectF())
+            self.selection_rect_item.setBrush(QColor(255, 165, 0, 60))
+            self.selection_rect_item.setPen(QPen(QColor(255, 165, 0), 0))
+            self.selection_rect_item.setZValue(10)
+            return
+
+        # 3. Alt = drag pixel selezionati
+        if event.modifiers() == Qt.AltModifier and self.selected_pixels:
+            rect = QRectF(
+                min(x for x, _ in self.selected_pixels),
+                min(y for _, y in self.selected_pixels),
+                max(x for x, _ in self.selected_pixels) - min(x for x, _ in self.selected_pixels) + 1,
+                max(y for _, y in self.selected_pixels) - min(y for _, y in self.selected_pixels) + 1,
+            )
+            if rect.contains(pos):
+                self.alt_drag_active = True
+                self.drag_start_pos = event.pos()
+                self.drag_start_scene_pos = pos
+                self._drag_origin = (rect.x(), rect.y())
+                self._create_drag_preview()
+                self.setCursor(Qt.ClosedHandCursor)
+                return
+
+        # 4. Click normale = seleziona 1x1
+        if event.button() == Qt.LeftButton:
+            if (x, y) in self.selected_pixels:
+                self.remove_pixel_from_selection(x, y)
+            else:
+                self.add_pixel_to_selection(x, y)
+
         super().mousePressEvent(event)
 
+
     def mouseMoveEvent(self, event):
+
+        # shift = aggiornamento rect selezione
+        if self.drag_selecting and self.selection_rect_item:
+            current_pos = self.mapToScene(event.pos())
+            rect = QRectF(self.drag_start_pos, current_pos).normalized()
+            self.selection_rect_item.setRect(rect)
+            return
+
+        # alt = anteprima drag
+        if self.alt_drag_active and self.drag_preview_item:
+            current_scene_pos = self.mapToScene(event.pos())
+            delta = current_scene_pos - self.drag_start_scene_pos
+            dx = int(round(delta.x()))
+            dy = int(round(delta.y()))
+            self.drag_preview_item.setPos(self._drag_origin[0] + dx, self._drag_origin[1] + dy)
+            self._drag_offset = (dx, dy)
+            return
+
         self.handle_drag_move(event)
         super().mouseMoveEvent(event)
 
+
     def mouseReleaseEvent(self, event):
+
+        # shift = fine selezione
+        if self.drag_selecting and self.selection_rect_item:
+            rect = self.selection_rect_item.rect().toRect()
+            self.scene.removeItem(self.selection_rect_item)
+            self.selection_rect_item = None
+            self.drag_selecting = False
+
+            image = self.pixmap_item.pixmap().toImage()
+            for x in range(rect.left(), rect.right() + 1):
+                for y in range(rect.top(), rect.bottom() + 1):
+                    if 0 <= x < image.width() and 0 <= y < image.height():
+                        alpha = image.pixelColor(x, y).alpha()
+                        if alpha == 0:
+                            continue
+                        if (x, y) in self.selected_pixels:
+                            self.remove_pixel_from_selection(x, y)
+                        else:
+                            self.add_pixel_to_selection(x, y)
+
+            return
+
+        # alt = fine drag
+        if self.alt_drag_active:
+            self.alt_drag_active = False
+            self.setCursor(Qt.ArrowCursor)
+            if self.drag_preview_item:
+                self.scene.removeItem(self.drag_preview_item)
+                self.drag_preview_item = None
+            dx, dy = self._drag_offset
+            if dx != 0 or dy != 0:
+                print(f"[TODO] Applica spostamento: dx={dx}, dy={dy}")
+            self._drag_offset = (0, 0)
+            return
+
         self.handle_drag_release(event)
         super().mouseReleaseEvent(event)
+
+    
+    def update_selection_overlay(self):
+        if self.pixmap_item is None:
+            return
+
+        base = self.pixmap_item.pixmap()
+        width = base.width()
+        height = base.height()
+
+        # Overlay vuoto trasparente
+        image = QImage(width, height, QImage.Format_ARGB32)
+        image.fill(Qt.transparent)
+
+        for x, y in self.selected_pixels:
+            if 0 <= x < width and 0 <= y < height:
+                color = QColor(200, 200, 200, 100)
+                image.setPixelColor(x, y, color)
+
+        overlay = QPixmap.fromImage(image)
+
+        if self.selection_overlay_item:
+            self.scene.removeItem(self.selection_overlay_item)
+
+        self.selection_overlay_item = self.scene.addPixmap(overlay)
+        self.selection_overlay_item.setZValue(self.pixmap_item.zValue() + 1)
+
+
+    def add_pixel_to_selection(self, x, y):
+        self.selected_pixels.add((x, y))
+        print(f"[DEBUG] aggiunto pixel: ({x}, {y})")
+        self.update_selection_overlay()
+
+
+    def remove_pixel_from_selection(self, x, y):
+        self.selected_pixels.discard((x, y))
+        self.update_selection_overlay()
+
+
+    def _create_drag_preview(self):
+        preview = create_pixel_preview(self.pixmap_item.pixmap(), self.selected_pixels)
+        self.drag_preview_item = self.scene.addPixmap(preview)
+        self.drag_preview_item.setZValue(20)
+        min_x = min(x for x, _ in self.selected_pixels)
+        min_y = min(y for _, y in self.selected_pixels)
+        self.drag_preview_item.setPos(min_x, min_y)
+
         
     def wheelEvent(self, event):
         apply_zoom(self, event, zoom_in=1.15)
@@ -209,6 +362,7 @@ class MainWindow(QMainWindow):
             self.redo_stack.clear()       
             self.save_state()
 
+    
     def save_image(self):
         if self.view.pixmap_item is None:
             return
@@ -221,7 +375,6 @@ class MainWindow(QMainWindow):
             )
             
  
-
     def reset_image(self):
         reset_state(
             self.view.pixmap_item,
