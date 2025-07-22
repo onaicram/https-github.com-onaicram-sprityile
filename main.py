@@ -37,10 +37,16 @@ class ImageViewer(QGraphicsView, CtrlDragMixin):
 
     color_picked = pyqtSignal(str)
 
+    def set_stack_refs(self, undo_stack, redo_stack):
+        self._undo_stack = undo_stack
+        self._redo_stack = redo_stack
+
+
     def mousePressEvent(self, event):
         if self.pixmap_item is None:
             return
         
+        # Dragging con Ctrl
         if event.modifiers() & Qt.ControlModifier:
             self.handle_drag_press(event)
             super().mousePressEvent(event)
@@ -49,14 +55,14 @@ class ImageViewer(QGraphicsView, CtrlDragMixin):
         pos = self.mapToScene(event.pos())
         x, y = int(pos.x()), int(pos.y())
 
-        # 1. Emit colore (funzione già esistente)
+        # Color Picking
         if 0 <= x < self.pixmap_item.pixmap().width() and 0 <= y < self.pixmap_item.pixmap().height():
             image = self.pixmap_item.pixmap().toImage()
             color = image.pixelColor(x, y)
             hex_color = color.name().upper()
             self.color_picked.emit(hex_color)
 
-        # 2. Shift = inizia selezione rettangolare
+        # Rect selezione con Shift
         if event.modifiers() & Qt.ShiftModifier:
             self.drag_selecting = True
             self.drag_start_pos = pos
@@ -69,7 +75,7 @@ class ImageViewer(QGraphicsView, CtrlDragMixin):
             self.selection_rect_item.setZValue(10)
             return
 
-        # 3. Alt = drag pixel selezionati
+        # Pixel drag con Alt
         if event.modifiers() == Qt.AltModifier and self.selected_pixels:
             rect = QRectF(
                 min(x for x, _ in self.selected_pixels),
@@ -78,6 +84,10 @@ class ImageViewer(QGraphicsView, CtrlDragMixin):
                 max(y for _, y in self.selected_pixels) - min(y for _, y in self.selected_pixels) + 1,
             )
             if rect.contains(pos):
+                image = self.pixmap_item.pixmap().toImage()
+                if 0 <= x < image.width() and 0 <= y < image.height():
+                    if image.pixelColor(x, y).alpha() == 0:
+                        return 
                 self.alt_drag_active = True
                 self.drag_start_pos = event.pos()
                 self.drag_start_scene_pos = pos
@@ -86,7 +96,7 @@ class ImageViewer(QGraphicsView, CtrlDragMixin):
                 self.setCursor(Qt.ClosedHandCursor)
                 return
 
-        # 4. Click normale = seleziona 1x1
+        # Click singolo su pixel
         if event.button() == Qt.LeftButton:
             if (x, y) in self.selected_pixels:
                 self.remove_pixel_from_selection(x, y)
@@ -98,14 +108,14 @@ class ImageViewer(QGraphicsView, CtrlDragMixin):
 
     def mouseMoveEvent(self, event):
 
-        # shift = aggiornamento rect selezione
+        # Rect selezione con Shift
         if self.drag_selecting and self.selection_rect_item:
             current_pos = self.mapToScene(event.pos())
             rect = QRectF(self.drag_start_pos, current_pos).normalized()
             self.selection_rect_item.setRect(rect)
             return
 
-        # alt = anteprima drag
+        # Pixel Drag con Alt
         if self.alt_drag_active and self.drag_preview_item:
             current_scene_pos = self.mapToScene(event.pos())
             delta = current_scene_pos - self.drag_start_scene_pos
@@ -121,7 +131,7 @@ class ImageViewer(QGraphicsView, CtrlDragMixin):
 
     def mouseReleaseEvent(self, event):
 
-        # shift = fine selezione
+        # Rect selezione con Shift
         if self.drag_selecting and self.selection_rect_item:
             rect = self.selection_rect_item.rect().toRect()
             self.scene.removeItem(self.selection_rect_item)
@@ -139,10 +149,9 @@ class ImageViewer(QGraphicsView, CtrlDragMixin):
                             self.remove_pixel_from_selection(x, y)
                         else:
                             self.add_pixel_to_selection(x, y)
-
             return
 
-        # alt = fine drag
+        # Pixel Drag con Alt
         if self.alt_drag_active:
             self.alt_drag_active = False
             self.setCursor(Qt.ArrowCursor)
@@ -151,7 +160,8 @@ class ImageViewer(QGraphicsView, CtrlDragMixin):
                 self.drag_preview_item = None
             dx, dy = self._drag_offset
             if dx != 0 or dy != 0:
-                print(f"[TODO] Applica spostamento: dx={dx}, dy={dy}")
+                save_state(self.pixmap_item, self.selected_pixels, self._undo_stack, self._redo_stack)
+                self.apply_pixel_move(dx, dy)
             self._drag_offset = (0, 0)
             return
 
@@ -187,9 +197,48 @@ class ImageViewer(QGraphicsView, CtrlDragMixin):
 
     def add_pixel_to_selection(self, x, y):
         self.selected_pixels.add((x, y))
-        print(f"[DEBUG] aggiunto pixel: ({x}, {y})")
         self.update_selection_overlay()
 
+    
+    def apply_pixel_move(self, dx: int, dy: int):
+        if not self.pixmap_item or not self.selected_pixels:
+            return
+        
+        main_window = self.window()
+        if hasattr(main_window, "save_state"):
+            main_window.save_state()
+        
+        pixmap = self.pixmap_item.pixmap()
+        image = pixmap.toImage()
+        width = image.width()
+        height = image.height()
+
+        # Crea una copia dei pixel selezionati e dei loro colori
+        moved_pixels = []
+        for x, y in sorted(self.selected_pixels):
+            if 0 <= x < width and 0 <= y < height:
+                color = image.pixelColor(x, y)
+                moved_pixels.append(((x + dx, y + dy), color))
+
+        # Rendi trasparenti i pixel originali
+        for x, y in self.selected_pixels:
+            if 0 <= x < width and 0 <= y < height:
+                image.setPixelColor(x, y, QColor(0, 0, 0, 0))
+
+        # Applica i nuovi pixel
+        for (new_x, new_y), color in moved_pixels:
+            if 0 <= new_x < width and 0 <= new_y < height:
+                image.setPixelColor(new_x, new_y, color)
+                
+
+        # Aggiorna pixmap e scena
+        self.pixmap_item.setPixmap(QPixmap.fromImage(image))
+
+        # Aggiorna le coordinate dei pixel selezionati
+        self.selected_pixels = {(x + dx, y + dy) for (x, y) in self.selected_pixels}
+        self.selected_pixels.clear()
+        self.update_selection_overlay()
+        
 
     def remove_pixel_from_selection(self, x, y):
         self.selected_pixels.discard((x, y))
@@ -220,6 +269,8 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("Sprityle")
 
         self.view = ImageViewer()
+        self.view.set_stack_refs(self.undo_stack, self.redo_stack)
+
         self.original_pixmap = None  
         self.view.color_picked.connect(self.show_color)
 
@@ -388,13 +439,13 @@ class MainWindow(QMainWindow):
         )
 
     def save_state(self):
-        save_state(self.view.pixmap_item, set(), self.undo_stack, self.redo_stack)
+        save_state(self.view.pixmap_item, self.view.selected_pixels, self.undo_stack, self.redo_stack)
 
 
     def undo(self):
         undo_state(
             self.view.pixmap_item,
-            set(),  # Nessuna selezione in ImageViewer
+            self.view.selected_pixels,
             self.undo_stack,
             self.redo_stack,
             restore_selection_fn=None
@@ -403,7 +454,7 @@ class MainWindow(QMainWindow):
     def redo(self):
         redo_state(
             self.view.pixmap_item,
-            set(),
+            self.view.selected_pixels,
             self.undo_stack,
             self.redo_stack,
             restore_selection_fn=None
