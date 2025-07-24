@@ -1,10 +1,10 @@
 from PyQt5.QtWidgets import (QWidget, QPushButton, QHBoxLayout, QVBoxLayout, QMessageBox,
                              QGraphicsScene, QLabel, QSpinBox, QSizePolicy, QGraphicsRectItem, QShortcut)
-from PyQt5.QtGui import QPixmap, QKeySequence, QPainter, QColor
+from PyQt5.QtGui import QPixmap, QKeySequence, QPainter, QColor, QImage
 from PyQt5.QtCore import Qt, QRectF
 
 from utils.controls_utils import save_pixmap_dialog, ShiftDragRectSelectMixin, get_snapped_rect, is_atlas_file
-from utils.graphics_utils import load_image_with_checker
+from utils.graphics_utils import load_image_with_checker, is_checker_color
 from utils.states_utils import save_state, undo_state, redo_state, reset_state
 from utils.grid_utils import draw_grid_ui
 from tile_splitter.tile_splitter import GridGraphicsView
@@ -257,7 +257,21 @@ class AtlasManagerWindow(QWidget):
         for x, y in selected_tiles:
             src_x = x * tile_size
             src_y = y * tile_size
-            tile = source_pixmap.copy(src_x, src_y, tile_size, tile_size)
+
+            tile_image = QImage(tile_size, tile_size, QImage.Format_ARGB32)
+            tile_image.fill(Qt.transparent)
+
+            source_image = source_pixmap.toImage()
+            for i in range(tile_size):
+                for j in range(tile_size):
+                    pixel_x = src_x + i
+                    pixel_y = src_y + j
+                    if pixel_x < source_image.width() and pixel_y < source_image.height():
+                        color = source_image.pixelColor(pixel_x, pixel_y)
+                        if not is_checker_color(color):
+                            tile_image.setPixelColor(i, j, color)
+
+            tile = QPixmap.fromImage(tile_image)
 
             dest_x = (x - min_x) * tile_size
             dest_y = (y - min_y) * tile_size

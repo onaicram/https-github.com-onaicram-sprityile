@@ -39,6 +39,10 @@ def draw_checkerboard_pixmap(width, height, tile_size=16):
     painter.end()
     return checkerboard
 
+def is_checker_color(color: QColor) -> bool:
+    return color == QColor(255, 255, 255) or color == QColor(200, 200, 200)
+
+
 
 def auto_fit_view(view, pixmap_or_pixitem, margin_ratio=0.9):
 

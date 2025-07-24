@@ -1,6 +1,7 @@
-from PyQt5.QtWidgets import QFileDialog, QGraphicsView, QMessageBox, QGraphicsRectItem, QGraphicsPixmapItem
+from PyQt5.QtWidgets import QFileDialog, QGraphicsView, QMessageBox, QLabel
 from PyQt5.QtCore import Qt, QRectF
 from PyQt5.QtGui import QPixmap, QColor, QPen
+from PyQt5.QtCore import pyqtSignal
 
 from utils.graphics_utils import create_pixel_preview
 
@@ -109,4 +110,10 @@ def is_atlas_file(file_path: str) -> bool:
     return filename.startswith("atlas_")
 
 
+class ClickableLabel(QLabel):
+    clicked = pyqtSignal()
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.LeftButton:
+            self.clicked.emit()
 

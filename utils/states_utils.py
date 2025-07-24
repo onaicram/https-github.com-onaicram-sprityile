@@ -52,7 +52,8 @@ def redo_state(pixmap_item, selected_coords: set, undo_stack: list, redo_stack: 
 
 
 def reset_state(pixmap_item, original_pixmap: QPixmap, selected_coords: set,
-                undo_stack: list, redo_stack: list, restore_selection_fn=None, color_field=None, parent=None):
+                undo_stack: list, redo_stack: list, restore_selection_fn=None, 
+                color_field=None, color_preview=None, current_color=None, parent=None):
     if not pixmap_item or not original_pixmap:
         return
 
@@ -79,6 +80,12 @@ def reset_state(pixmap_item, original_pixmap: QPixmap, selected_coords: set,
 
     if color_field:
         color_field.setText("Nessun colore")
+
+    if color_preview:
+        color_preview.setStyleSheet("background-color: black; border: 1px solid black;")
+
+    if current_color:
+        current_color.setRgb(0, 0, 0)
 
     if parent:
         QMessageBox.information(parent, "Reset", "Immagine ripristinata.")
