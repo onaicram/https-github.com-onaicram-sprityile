@@ -514,7 +514,6 @@ class WorkView(QGraphicsView):
         self._drawing = True
         self._draw_started = False
         self._draw_pixel_at(event)
-        return
 
     def _draw_pixel_at(self, event):
         if not self.pixmap_item:
@@ -552,10 +551,6 @@ class WorkView(QGraphicsView):
         image = self.pixmap_item.pixmap().toImage()
         if not (0 <= x < image.width() and 0 <= y < image.height()):
             return
-
-        if not self._delete_started:
-            self._save_state()
-            self._delete_started = True
 
         image.setPixelColor(x, y, QColor(0, 0, 0, 0))  # trasparente
         self.pixmap_item.setPixmap(QPixmap.fromImage(image))
