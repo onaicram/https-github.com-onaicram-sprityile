@@ -381,11 +381,11 @@ class WorkView(QGraphicsView):
 
             if dx != 0 or dy != 0:
 
-                # Salva stato
-                self._save_state()
-
                 # Applica lo spostamento dei pixel selezionati
                 self._apply_pixel_move(dx, dy)
+
+                # Salva stato
+                self._save_state()
 
             self._alt_drag_offset = (0, 0)
             self.restore_selection(self.selected_pixels, mode="pixel")
