@@ -114,8 +114,9 @@ class WorkView(QGraphicsView):
         
         # ALT + CLICK -> DRAG SELECTED PIXELS
         if event.modifiers() == Qt.AltModifier and self.selected_pixels:
-            self._start_alt_drag(event)
-            return
+            if self._current_mode == "select":
+                self._start_alt_drag(event)
+                return
 
         # COLOR PICKING
         if self._current_mode == "picker":
@@ -184,12 +185,15 @@ class WorkView(QGraphicsView):
             self._end_alt_drag()
             
         # DRAW PIXELS END
-        if self._current_mode == "draw" and self._drawing:
+        if self._drawing:
             self._end_pixel_draw()
             
         # DELETE PIXELS END
-        if self._current_mode == "delete" and self._deleting:
+        if self._deleting:
             self._end_pixel_delete()
+
+        if self._current_mode in ("draw", "delete") and event.button() == Qt.LeftButton:
+            self._save_state()
            
         super().mouseReleaseEvent(event)
 
@@ -347,8 +351,7 @@ class WorkView(QGraphicsView):
         self._alt_drag_active = True
         self._alt_drag_start_scene = pos
         self._alt_drag_origin = (min_x, min_y)
-        self._alt_drag_offset = (0, 0)
-
+        
         preview = create_pixel_preview(self.pixmap_item.pixmap(), self.selected_pixels)
         self._alt_drag_preview_item = self.scene.addPixmap(preview)
         self._alt_drag_preview_item.setZValue(20)
@@ -376,14 +379,13 @@ class WorkView(QGraphicsView):
 
             dx, dy = self._alt_drag_offset
 
-            if dx == 0 and dy == 0:
-                return
+            if dx != 0 or dy != 0:
 
-            # Salva stato
-            self._save_state()
+                # Salva stato
+                self._save_state()
 
-            # Applica lo spostamento dei pixel selezionati
-            self._apply_pixel_move(dx, dy)
+                # Applica lo spostamento dei pixel selezionati
+                self._apply_pixel_move(dx, dy)
 
             self._alt_drag_offset = (0, 0)
             self.restore_selection(self.selected_pixels, mode="pixel")
@@ -512,6 +514,7 @@ class WorkView(QGraphicsView):
         self._drawing = True
         self._draw_started = False
         self._draw_pixel_at(event)
+        return
 
     def _draw_pixel_at(self, event):
         if not self.pixmap_item:
@@ -524,17 +527,12 @@ class WorkView(QGraphicsView):
         if not (0 <= x < image.width() and 0 <= y < image.height()):
             return
 
-        if not self._draw_started:
-            self._save_state()
-            self._draw_started = True
-
         image.setPixelColor(x, y, self.current_color)
-        self.pixmap_item.setPixmap(QPixmap.fromImage(image))
+        new_pixmap = QPixmap.fromImage(image)
+        self.pixmap_item.setPixmap(new_pixmap)
 
     def _end_pixel_draw(self):
         self._drawing = False
-        if not self._draw_started:
-            self._save_state()
         self._draw_started = False
 
    
@@ -658,8 +656,4 @@ class WorkView(QGraphicsView):
                     image.setPixelColor(x, y, QColor(0, 0, 0, 0))
         self.pixmap_item.setPixmap(QPixmap.fromImage(image))
         
-
-    def refresh_view(self):
-        self.scene.update()
-        self.viewport().update()
 

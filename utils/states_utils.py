@@ -39,9 +39,9 @@ def undo_state(pixmap_item, selected_coords: set, undo_stack: list, redo_stack: 
         print("[UNDO] Stack troppo corto, impossibile annullare.")
         return
 
-    previous = undo_stack[-1]
     current = undo_stack.pop()
     redo_stack.append(current)
+    previous = undo_stack[-1]
 
     apply_state(pixmap_item, selected_coords, previous, restore_selection_fn)
 
@@ -65,12 +65,11 @@ def redo_state(pixmap_item, selected_coords: set, undo_stack: list, redo_stack: 
         return
 
     next_state = redo_stack.pop()
-
     undo_stack.append(next_state)
+
     apply_state(pixmap_item, selected_coords, next_state, restore_selection_fn)
 
     print(f"[REDO] OK → UNDO: {len(undo_stack)} | REDO: {len(redo_stack)} | SEL: {next_state['selection']}")
-
     print(f"[REDO] Pixmap Item: {next_state['pixmap']}")
 
     # stampa il contenuto di redo stack
@@ -122,8 +121,3 @@ def reset_state(pixmap_item, original_pixmap: QPixmap, selected_coords: set,
         QMessageBox.information(parent, "Reset", "Immagine ripristinata.")
 
 
-def _get_pixmap_hash(pixmap):
-    image = pixmap.toImage()
-    bits = image.bits()
-    bits.setsize(image.byteCount())  # necessario per accedere ai dati grezzi
-    return hash(bytes(bits))
