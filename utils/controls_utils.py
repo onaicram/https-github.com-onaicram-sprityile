@@ -3,24 +3,37 @@ from PyQt5.QtCore import Qt, QRectF
 from PyQt5.QtGui import QPixmap, QColor, QPen
 from PyQt5.QtCore import pyqtSignal
 
-from utils.graphics_utils import create_pixel_preview
-
 import os
 
 
 class CtrlDragMixin:
+
+    def __init__(self):
+        self._panning = False
+        self._drag_start = None
+
     def handle_drag_press(self, event):
         if event.button() == Qt.LeftButton and (event.modifiers() & Qt.ControlModifier):
+            self._panning = True
+            self._pan_start = event.pos()
             self.setDragMode(QGraphicsView.ScrollHandDrag)
+            return True
+        return False
 
     def handle_drag_move(self, event):
         if self.dragMode() == QGraphicsView.ScrollHandDrag:
             self.viewport().setCursor(Qt.ClosedHandCursor)
-
+            return True
+        return False
+            
     def handle_drag_release(self, event):
         if event.button() in (Qt.LeftButton, Qt.RightButton):
+            self._panning = False
+            self._pan_start = None
             self.setDragMode(QGraphicsView.NoDrag)
             self.viewport().setCursor(Qt.ArrowCursor)
+            return True
+        return False
 
 
 class ShiftDragRectSelectMixin:
@@ -38,7 +51,7 @@ class ShiftDragRectSelectMixin:
 
             self.selection_rect_item = scene.addRect(QRectF())
             self.selection_rect_item.setBrush(QColor(255, 165, 0, 60))  # semi-trasparente
-            self.selection_rect_item.setPen(QPen(QColor(255, 165, 0), 1))  # bordo pieno
+            self.selection_rect_item.setPen(QPen(QColor(255, 165, 0), 0))
             self.selection_rect_item.setZValue(8)
             return True
         return False

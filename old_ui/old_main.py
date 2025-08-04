@@ -9,7 +9,7 @@ from PyQt5.QtCore import Qt, pyqtSignal, QRectF
 from tile_splitter.tile_splitter import TileSplitterWindow
 from atlas.atlas_manager import AtlasManagerWindow
 from utils.graphics_utils import load_image_with_checker
-from utils.controls_utils import save_pixmap_dialog, apply_zoom, CtrlDragMixin, is_atlas_file, create_pixel_preview, ClickableLabel
+from utils.controls_utils import save_pixmap_dialog, apply_zoom, CtrlDragMixin, is_atlas_file, ClickableLabel
 from utils.states_utils import save_state, undo_state, redo_state, reset_state
 from utils.meta_utils import MetaUtils
 
@@ -357,7 +357,7 @@ class ImageViewer(QGraphicsView, CtrlDragMixin):
         apply_zoom(self, event, zoom_in=1.15)
 
 
-class MainWindow(QMainWindow):
+class LegacyMainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
 
@@ -620,7 +620,7 @@ class MainWindow(QMainWindow):
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
-    window = MainWindow()
+    window = LegacyMainWindow()
     window.resize(800, 600)
     window.show()
     sys.exit(app.exec_())

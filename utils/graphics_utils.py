@@ -11,17 +11,18 @@ def draw_checkerboard_for_view(view, tile_size: int):
     # controlla se checker_item è valido
     if hasattr(view, "checker_item") and view.checker_item is not None:
         try:
-            view.scene().removeItem(view.checker_item)
+            view.scene.removeItem(view.checker_item)
         except RuntimeError:
             pass  # È già stato distrutto, ignora
+
+    view.checker_item = None
 
     pixmap = view.pixmap_item.pixmap()
     checker_pixmap = draw_checkerboard_pixmap(pixmap.width(), pixmap.height(), tile_size)
     checker_item = QGraphicsPixmapItem(checker_pixmap)
     checker_item.setZValue(0)
-    view.scene().addItem(checker_item)
+    view.scene.addItem(checker_item)
     view.checker_item = checker_item
-
 
 def draw_checkerboard_pixmap(width, height, tile_size=16):
     checkerboard = QPixmap(width, height)
@@ -41,7 +42,6 @@ def draw_checkerboard_pixmap(width, height, tile_size=16):
 
 def is_checker_color(color: QColor) -> bool:
     return color == QColor(255, 255, 255) or color == QColor(200, 200, 200)
-
 
 
 def auto_fit_view(view, pixmap_or_pixitem, margin_ratio=0.9):

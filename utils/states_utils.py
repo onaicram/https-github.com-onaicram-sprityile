@@ -1,7 +1,6 @@
 from PyQt5.QtGui import QPixmap
 from PyQt5.QtWidgets import QMessageBox
 
-
 def save_state(pixmap_item, selected_coords: set, undo_stack: list, redo_stack: list):
     if not pixmap_item:
         print("save_state: pixmap_item is None")
@@ -13,7 +12,10 @@ def save_state(pixmap_item, selected_coords: set, undo_stack: list, redo_stack: 
     }
     undo_stack.append(state)
     redo_stack.clear()
-
+    print(f"[SAVE] Stato salvato. UNDO: {len(undo_stack)} | REDO: {len(redo_stack)} | SEL: {len(selected_coords)}")
+    print(f"[SAVE] Pixmap Item: {state['pixmap']}")
+    for i, state in enumerate(undo_stack):
+        print(f"---[SAVE] Undo Stack {i}: {state['pixmap']}")
 
 def apply_state(pixmap_item, selected_coords: set, state: dict, restore_selection_fn=None):
     if not state or not pixmap_item:
@@ -28,27 +30,56 @@ def apply_state(pixmap_item, selected_coords: set, state: dict, restore_selectio
     selected_coords.clear()
     selected_coords.update(state.get("selection", []))
 
+    if pixmap_item:
+        pixmap_item.update()
+
 
 def undo_state(pixmap_item, selected_coords: set, undo_stack: list, redo_stack: list, restore_selection_fn=None):
     if len(undo_stack) <= 1:
         print("[UNDO] Stack troppo corto, impossibile annullare.")
         return
+
+    previous = undo_stack[-1]
     current = undo_stack.pop()
     redo_stack.append(current)
-    previous = undo_stack[-1]
 
     apply_state(pixmap_item, selected_coords, previous, restore_selection_fn)
+
+    print(f"[UNDO] OK → UNDO: {len(undo_stack)} | REDO: {len(redo_stack)} | SEL: {previous['selection']}")
+
+    print(f"[UNDO] Pixmap Item: {previous['pixmap']}")
+
+    # stampa il contenuto di undo stack
+    for i, state in enumerate(undo_stack):  
+        print(f"---[UNDO] Undo Stack {i}: {state['pixmap']}")
+
+    # stampa il contenuto di redo stack
+    for i, state in enumerate(redo_stack):
+        print(f"---[UNDO] Redo Stack {i}: {state['pixmap']}")
+    
 
 
 def redo_state(pixmap_item, selected_coords: set, undo_stack: list, redo_stack: list, restore_selection_fn=None):
     if not redo_stack:
         print("[REDO] Stack vuoto, niente da rifare.")
         return
-    
-    next_state = redo_stack.pop()
-    undo_stack.append(next_state)
 
+    next_state = redo_stack.pop()
+
+    undo_stack.append(next_state)
     apply_state(pixmap_item, selected_coords, next_state, restore_selection_fn)
+
+    print(f"[REDO] OK → UNDO: {len(undo_stack)} | REDO: {len(redo_stack)} | SEL: {next_state['selection']}")
+
+    print(f"[REDO] Pixmap Item: {next_state['pixmap']}")
+
+    # stampa il contenuto di redo stack
+    for i, state in enumerate(redo_stack):
+        print(f"---[REDO] Redo Stack {i}: {state['pixmap']}")
+
+    # stampa il contenuto di undo stack
+    for i, state in enumerate(undo_stack):
+        print(f"---[REDO] Undo Stack {i}: {state['pixmap']}")
 
 
 def reset_state(pixmap_item, original_pixmap: QPixmap, selected_coords: set,
@@ -91,3 +122,8 @@ def reset_state(pixmap_item, original_pixmap: QPixmap, selected_coords: set,
         QMessageBox.information(parent, "Reset", "Immagine ripristinata.")
 
 
+def _get_pixmap_hash(pixmap):
+    image = pixmap.toImage()
+    bits = image.bits()
+    bits.setsize(image.byteCount())  # necessario per accedere ai dati grezzi
+    return hash(bytes(bits))

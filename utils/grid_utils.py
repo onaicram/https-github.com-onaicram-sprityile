@@ -48,7 +48,7 @@ def draw_grid_for_view(view, tile_size: int):
         return
     clear_grid_for_view(view)
     view.grid_items = draw_grid_lines(
-        view.scene(),
+        view.scene,
         view.pixmap_item.pixmap().width(),
         view.pixmap_item.pixmap().height(),
         tile_size
@@ -59,8 +59,8 @@ def draw_grid_for_view(view, tile_size: int):
 def clear_grid_for_view(view):
     if hasattr(view, "grid_items"):
         for item in view.grid_items:
-            if isinstance(item, QGraphicsItem):
-                view.scene().removeItem(item)
+            if isinstance(item, QGraphicsItem) and item.scene:
+                view.scene.removeItem(item)
     view.grid_items = []
     view.grid_visible = False
 
