@@ -1,4 +1,4 @@
-from PyQt5.QtWidgets import QGraphicsView, QGraphicsScene
+from PyQt5.QtWidgets import QGraphicsView, QGraphicsScene, QGraphicsRectItem
 from PyQt5.QtGui import QPainter, QColor, QPixmap, QPen, QImage
 from PyQt5.QtCore import pyqtSignal, Qt, QRectF
 
@@ -54,6 +54,7 @@ class WorkView(QGraphicsView):
 
         # Alt Dragging
         self._alt_drag_active = False
+        self._alt_drag_start_pos = None
         self._alt_drag_start_scene = None
         self._alt_drag_preview_item = None
         self._alt_drag_origin = (0, 0)
@@ -82,7 +83,13 @@ class WorkView(QGraphicsView):
         apply_zoom(self, event, zoom_in=1.15)
 
     def keyPressEvent(self, event):
-        if event.key() == Qt.Key_O:
+        if event.key() == Qt.Key_G:
+            main_window = self.window()
+            if hasattr(main_window, "grid_box"):
+                grid_box = main_window.grid_box
+                grid_box.grid_button.setChecked(not grid_box.grid_button.isChecked())
+                grid_box.toggle_grid()
+        elif event.key() == Qt.Key_O:
             self._current_mode = "picker"
             self.mode_changed.emit("picker")
         elif event.key() == Qt.Key_P:
@@ -112,8 +119,8 @@ class WorkView(QGraphicsView):
             self._start_shift_rect_selection(event)
             return
         
-        # ALT + CLICK -> DRAG SELECTED PIXELS
-        if event.modifiers() == Qt.AltModifier and self.selected_pixels:
+        # ALT + CLICK -> DRAG PIXELS OR TILES
+        if event.modifiers() == Qt.AltModifier:
             if self._current_mode == "select":
                 self._start_alt_drag(event)
                 return
@@ -151,8 +158,8 @@ class WorkView(QGraphicsView):
         if self._shift_rect_selecting and self.selection_rect_item:
             self._update_shift_rect_selection(event)
             return
-            
-        # ALT + CLICK -> DRAG SELECTED PIXELS
+
+        # ALT + CLICK -> DRAG SELECTED PIXELS OR TILES
         if self._alt_drag_active and self._alt_drag_preview_item:
             self._update_alt_drag(event)
             return
@@ -179,8 +186,8 @@ class WorkView(QGraphicsView):
         # SHIFT + CLICK -> END RECT SELECTION
         if self._shift_rect_selecting:
             self._end_shift_rect_selection()
-        
-        # ALT + CLICK -> END DRAG SELECTED PIXELS
+
+        # ALT + CLICK -> END DRAG SELECTED PIXELS OR TILES
         if self._alt_drag_active:
             self._end_alt_drag()
             
@@ -273,14 +280,6 @@ class WorkView(QGraphicsView):
             x2 = int(rect.right() // tile_w)
             y2 = int(rect.bottom() // tile_h)
 
-            # Salva prima dello stato se cambia qualcosa
-            has_new = any(
-                (x, y) not in self.selected_tiles
-                for x in range(x1, x2 + 1)
-                for y in range(y1, y2 + 1)
-            )
-            if has_new:
-                self._save_state()
 
             for x in range(x1, x2 + 1):
                 for y in range(y1, y2 + 1):
@@ -295,6 +294,7 @@ class WorkView(QGraphicsView):
                     else:
                         self.selected_tiles.remove(coord)
                         self._remove_tile_marker(coord)
+            self._save_state()
 
         # PIXEL SELECTION
         else:
@@ -325,8 +325,26 @@ class WorkView(QGraphicsView):
             self._update_selection_overlay()
 
 
-    # ALT + CLICK -> DRAG SELECTED PIXELS
+    # ALT + CLICK -> DRAG SELECTED PIXELS OR TILES
     def _start_alt_drag(self, event):
+        if self.grid_visible and self.selected_tiles:
+            self._start_tile_alt_drag(event)
+        elif self.selected_pixels:
+            self._start_pixel_alt_drag(event)
+
+    def _update_alt_drag(self, event):
+        if self.grid_visible and self.selected_tiles:
+            self._update_tile_alt_drag(event)
+        elif self.selected_pixels:
+            self._update_pixel_alt_drag(event)
+
+    def _end_alt_drag(self):
+        if self.grid_visible and self.selected_tiles:
+            self._end_tile_alt_drag()
+        elif self.selected_pixels:
+            self._end_pixel_alt_drag()
+
+    def _start_pixel_alt_drag(self, event):
         pos = self.mapToScene(event.pos())
         image = self.pixmap_item.pixmap().toImage()
 
@@ -359,7 +377,7 @@ class WorkView(QGraphicsView):
 
         self.setCursor(Qt.ClosedHandCursor)
 
-    def _update_alt_drag(self, event):
+    def _update_pixel_alt_drag(self, event):
         current_pos = self.mapToScene(event.pos())
         delta = current_pos - self._alt_drag_start_scene
         dx = int(round(delta.x()))
@@ -367,8 +385,8 @@ class WorkView(QGraphicsView):
         self._alt_drag_preview_item.setPos(self._alt_drag_origin[0] + dx, self._alt_drag_origin[1] + dy)
         self._alt_drag_offset = (dx, dy)
 
-    def _end_alt_drag(self):
-        
+    def _end_pixel_alt_drag(self):
+
         if self._alt_drag_active:
             self._alt_drag_active = False
             self.setCursor(Qt.ArrowCursor)
@@ -433,6 +451,163 @@ class WorkView(QGraphicsView):
         min_y = min(y for _, y in self.selected_pixels)
         self.drag_preview_item.setPos(min_x, min_y)
 
+    def _start_tile_alt_drag(self, event):
+
+        scene_pos = self.mapToScene(event.pos())
+        tiles = list(self.selected_tiles)
+
+        min_x = min(x for x, _ in tiles)
+        min_y = min(y for _, y in tiles)
+        max_x = max(x for x, _ in tiles)
+        max_y = max(y for _, y in tiles)
+
+        selection_rect = QRectF(
+            min_x * self.tile_size,
+            min_y * self.tile_size,
+            (max_x - min_x + 1) * self.tile_size,
+            (max_y - min_y + 1) * self.tile_size
+        )
+
+        if selection_rect.contains(scene_pos):
+            self._alt_drag_active = True
+            self._alt_drag_start_pos = scene_pos
+            self._alt_drag_start_scene = event.pos()
+            self._alt_drag_origin = (min_x * self.tile_size, min_y * self.tile_size)
+            self._create_alt_drag_preview()
+            return
+
+    def _update_tile_alt_drag(self, event):
+        if self._alt_drag_active and self._alt_drag_preview_item:
+
+            if self._alt_drag_start_scene is None:
+                return
+            
+            current_scene_pos = self.mapToScene(event.pos())
+            delta_scene = current_scene_pos - self._alt_drag_start_pos
+
+            dx = round(delta_scene.x() / self.tile_size) * self.tile_size
+            dy = round(delta_scene.y() / self.tile_size) * self.tile_size
+
+            self._alt_drag_preview_item.setPos(
+                self._alt_drag_origin[0] + dx,
+                self._alt_drag_origin[1] + dy
+            )
+
+            self._alt_drag_offset = (dx // self.tile_size, dy // self.tile_size)
+            return
+
+    def _end_tile_alt_drag(self):
+        if self._alt_drag_active:
+            self._alt_drag_active = False
+
+            if self._alt_drag_preview_item:
+                self.scene.removeItem(self._alt_drag_preview_item)
+                self._alt_drag_preview_item = None
+
+            dx, dy = self._alt_drag_offset
+            if dx != 0 or dy != 0:
+                target_x = min(x for x, _ in self.selected_tiles) + dx
+                target_y = min(y for _, y in self.selected_tiles) + dy
+                self._move_selected_tiles_by(target_x, target_y)
+
+            self._alt_drag_offset = (0, 0)
+            return
+
+    def _create_alt_drag_preview(self):
+        tile_size = self.tile_size
+        tiles = sorted(self.selected_tiles)
+
+        min_x = min(x for x, _ in tiles)
+        min_y = min(y for _, y in tiles)
+        max_x = max(x for x, _ in tiles)
+        max_y = max(y for _, y in tiles)
+
+        width = (max_x - min_x + 1) * tile_size
+        height = (max_y - min_y + 1) * tile_size
+
+        # Crea l'immagine preview
+        preview = QPixmap(width, height)
+        preview.fill(Qt.transparent)
+
+        painter = QPainter(preview)
+        for x, y in tiles:
+            src_x = x * tile_size
+            src_y = y * tile_size
+            tile = self.pixmap_item.pixmap().copy(src_x, src_y, tile_size, tile_size)
+            dest_x = (x - min_x) * tile_size
+            dest_y = (y - min_y) * tile_size
+            painter.drawPixmap(dest_x, dest_y, tile)
+        painter.end()
+
+        self._alt_drag_preview_item = self.scene.addPixmap(preview)
+        self._alt_drag_preview_item.setZValue(10)
+
+        # salviamo la posizione iniziale dei tile selezionati
+        self._alt_drag_preview_item.setPos(min_x * tile_size, min_y * tile_size)
+
+    def _move_selected_tiles_by(self, dx, dy):
+        tile_size = self.tile_size
+        source = self.pixmap_item.pixmap()
+        image = source.toImage()
+
+        # Bounding box della selezione corrente
+        min_x = min(x for x, _ in self.selected_tiles)
+        min_y = min(y for _, y in self.selected_tiles)
+
+        # Calcolo offset reale
+        offset_x = dx - min_x
+        offset_y = dy - min_y
+
+        self._save_state()
+
+        # Crea nuova immagine con i tile spostati
+        new_image = image.copy()
+
+        new_selected = set()
+
+        for x, y in self.selected_tiles:
+            px = x * tile_size
+            py = y * tile_size
+            tile = image.copy(px, py, tile_size, tile_size)
+
+            new_x = x + offset_x
+            new_y = y + offset_y
+
+            dest_x = new_x * tile_size
+            dest_y = new_y * tile_size
+
+            # Pulisce tile vecchio
+            color1 = QColor(200, 200, 200)
+            color2 = QColor(255, 255, 255)
+            for dx in range(tile_size):
+                for dy in range(tile_size):
+                    checker_color = color1 if ((x + dx // tile_size) + (y + dy // tile_size)) % 2 == 0 else color2
+                    new_image.setPixelColor(px + dx, py + dy, checker_color)
+
+            # Copia tile nuovo
+            for dx in range(tile_size):
+                for dy in range(tile_size):
+                    color = tile.pixelColor(dx, dy)
+                    new_image.setPixelColor(dest_x + dx, dest_y + dy, color)
+
+            new_selected.add((new_x, new_y))
+
+        # Applica nuova immagine
+        self.pixmap_item.setPixmap(QPixmap.fromImage(new_image))
+
+        # Pulisce selezione vecchia visiva
+        for tile in list(self.selected_tiles):
+            self._remove_tile_marker(tile)
+
+        self.selected_tiles.clear()
+
+        # Aggiorna selezione a nuovi tile
+        self.selected_tiles = new_selected
+        for tile in self.selected_tiles:
+            self._highlight_tile(tile)
+
+        self.viewport().update()
+
 
     # CLICK -> SELECT/DESELECT PIXELS OR TILES
     def _handle_main_click_selection(self, event):
@@ -451,9 +626,6 @@ class WorkView(QGraphicsView):
         return True
 
     def _handle_tile_click_selection(self, pos):
-        if not self._is_pos_inside_image(pos):
-            return
-
         tile_x = int(pos.x() // self.tile_size)
         tile_y = int(pos.y() // self.tile_size)
         coord = (tile_x, tile_y)
@@ -463,11 +635,15 @@ class WorkView(QGraphicsView):
         if was_added:
             self.selected_tiles.add(coord)
             self._highlight_tile(coord)
-            self._save_state()
         else:
             self.selected_tiles.remove(coord)
             self._remove_tile_marker(coord)
 
+        self._save_state()
+
+        print(f"[TILE CLICK] Stato salvato. Tiles selezionati: {self.selected_tiles}")
+        print(f"[TILE CLICK] Coordinate click: {pos}, tile coord: {coord}, was_added: {was_added}")
+        
     def _handle_pixel_click_selection(self,pos):
         if not self.pixmap_item:
             return
@@ -584,7 +760,13 @@ class WorkView(QGraphicsView):
     # UTILITY METHODS
     def _is_pos_inside_image(self, pos):
         return self.pixmap_item.pixmap().rect().contains(int(pos.x()), int(pos.y()))
-    
+
+    def restore_tile_selection(self, coords: set):
+        self.restore_selection(coords, mode="tile")
+
+    def restore_pixel_selection(self, coords: set):
+        self.restore_selection(coords, mode="pixel")
+
     def restore_selection(self, coords: set, mode: str = "pixel"):
         self._clear_all_selection()
 
@@ -633,6 +815,7 @@ class WorkView(QGraphicsView):
         self.setCursor(Qt.ArrowCursor)
 
     def _save_state(self):
+        print(f"[SAVE_STATE] Pre-save selected_tiles: {self.selected_tiles}")
         save_state(
             self.pixmap_item,
             self.selected_pixels if not self.grid_visible else self.selected_tiles,
@@ -651,4 +834,14 @@ class WorkView(QGraphicsView):
                     image.setPixelColor(x, y, QColor(0, 0, 0, 0))
         self.pixmap_item.setPixmap(QPixmap.fromImage(image))
         
+    def _update_tile_selection_visuals(self):
+        self._clear_all_tile_highlights()
+        for coord in self.selected_tiles:
+            self._highlight_tile(coord)
+
+    def _clear_all_tile_highlights(self):
+        if hasattr(self, "tile_markers"):
+            for item in self.tile_markers.values():
+                self.scene.removeItem(item)
+            self.tile_markers.clear()
 

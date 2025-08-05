@@ -12,8 +12,11 @@ def save_state(pixmap_item, selected_coords: set, undo_stack: list, redo_stack: 
     }
     undo_stack.append(state)
     redo_stack.clear()
+
+    # Debug Log
     print(f"[SAVE] Stato salvato. UNDO: {len(undo_stack)} | REDO: {len(redo_stack)} | SEL: {len(selected_coords)}")
-    print(f"[SAVE] Pixmap Item: {state['pixmap']}")
+    print(f"[SAVE] Selezione: {state['selection']}")
+
     for i, state in enumerate(undo_stack):
         print(f"---[SAVE] Undo Stack {i}: {state['pixmap']}")
 
@@ -30,10 +33,7 @@ def apply_state(pixmap_item, selected_coords: set, state: dict, restore_selectio
     selected_coords.clear()
     selected_coords.update(state.get("selection", []))
 
-    if pixmap_item:
-        pixmap_item.update()
-
-
+   
 def undo_state(pixmap_item, selected_coords: set, undo_stack: list, redo_stack: list, restore_selection_fn=None):
     if len(undo_stack) <= 1:
         print("[UNDO] Stack troppo corto, impossibile annullare.")
@@ -45,19 +45,19 @@ def undo_state(pixmap_item, selected_coords: set, undo_stack: list, redo_stack: 
 
     apply_state(pixmap_item, selected_coords, previous, restore_selection_fn)
 
-    print(f"[UNDO] OK → UNDO: {len(undo_stack)} | REDO: {len(redo_stack)} | SEL: {previous['selection']}")
-
+    # Debug Log
+    print(f"[UNDO] UNDO: {len(undo_stack)} | REDO: {len(redo_stack)} | SEL: {previous['selection']}")
     print(f"[UNDO] Pixmap Item: {previous['pixmap']}")
+    print(f"[UNDO] TILES: {selected_coords}")
 
     # stampa il contenuto di undo stack
     for i, state in enumerate(undo_stack):  
-        print(f"---[UNDO] Undo Stack {i}: {state['pixmap']}")
+        print(f"---[UNDO] Undo Stack {i}: {state['selection']}")
 
     # stampa il contenuto di redo stack
     for i, state in enumerate(redo_stack):
-        print(f"---[UNDO] Redo Stack {i}: {state['pixmap']}")
+        print(f"---[UNDO] Redo Stack {i}: {state['selection']}")
     
-
 
 def redo_state(pixmap_item, selected_coords: set, undo_stack: list, redo_stack: list, restore_selection_fn=None):
     if not redo_stack:
@@ -69,16 +69,18 @@ def redo_state(pixmap_item, selected_coords: set, undo_stack: list, redo_stack: 
 
     apply_state(pixmap_item, selected_coords, next_state, restore_selection_fn)
 
+    # Debug Log
     print(f"[REDO] OK → UNDO: {len(undo_stack)} | REDO: {len(redo_stack)} | SEL: {next_state['selection']}")
-    print(f"[REDO] Pixmap Item: {next_state['pixmap']}")
+    print(f"[REDO] Pixmap Item: {next_state['selection']}")
+    print(f"[REDO] TILES: {selected_coords}")
 
     # stampa il contenuto di redo stack
     for i, state in enumerate(redo_stack):
-        print(f"---[REDO] Redo Stack {i}: {state['pixmap']}")
+        print(f"---[REDO] Redo Stack {i}: {state['selection']}")
 
     # stampa il contenuto di undo stack
     for i, state in enumerate(undo_stack):
-        print(f"---[REDO] Undo Stack {i}: {state['pixmap']}")
+        print(f"---[REDO] Undo Stack {i}: {state['selection']}")
 
 
 def reset_state(pixmap_item, original_pixmap: QPixmap, selected_coords: set,

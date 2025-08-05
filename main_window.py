@@ -170,24 +170,22 @@ class MainWindow(QMainWindow):
     def on_undo(self):
         undo_state(
             self.work_view.pixmap_item,
-            self.work_view.selected_tiles,
+            self.work_view.selected_tiles if self.work_view.grid_visible else self.work_view.selected_pixels,
             self.undo_stack,
             self.redo_stack,
-            self.work_view.restore_selection
+            self.work_view.restore_tile_selection if self.work_view.grid_visible else self.work_view.restore_pixel_selection
         )
         
-
 
     def on_redo(self):
         redo_state(
             self.work_view.pixmap_item,
-            self.work_view.selected_tiles,
+            self.work_view.selected_tiles if self.work_view.grid_visible else self.work_view.selected_pixels,
             self.undo_stack,
             self.redo_stack,
-            self.work_view.restore_selection
+            self.work_view.restore_tile_selection if self.work_view.grid_visible else self.work_view.restore_pixel_selection
         )
         
-
 
     def on_reset(self):
         reset_state(

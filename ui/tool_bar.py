@@ -17,5 +17,3 @@ class ToolBar(QWidget):
         layout.addStretch()
 
         self.setLayout(layout)
-
-        # Connessioni da fare in main
