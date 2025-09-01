@@ -1,10 +1,10 @@
-from PyQt5.QtWidgets import QGraphicsView, QGraphicsScene, QGraphicsRectItem
-from PyQt5.QtGui import QPainter, QColor, QPixmap, QPen, QImage
+from PyQt5.QtWidgets import QGraphicsView, QGraphicsScene, QShortcut
+from PyQt5.QtGui import QPainter, QColor, QPixmap, QPen, QImage, QKeySequence
 from PyQt5.QtCore import pyqtSignal, Qt, QRectF
 
-from utils.controls_utils import apply_zoom
+from utils.controls_utils import apply_zoom, save_pixmap_dialog
 from utils.states_utils import save_state
-from utils.graphics_utils import create_pixel_preview
+from utils.graphics_utils import create_pixel_preview, is_checker_color
 
 class WorkView(QGraphicsView):
 
@@ -23,6 +23,16 @@ class WorkView(QGraphicsView):
         self._current_mode = "select"
         self.pixmap_item = None
         self.checker_item = None
+
+        delete_shortcut = QShortcut(QKeySequence("L"), self)
+        delete_shortcut.activated.connect(self._handle_tile_delete)
+
+        ruler_shortcut = QShortcut(QKeySequence("R"), self)
+        ruler_shortcut.activated.connect(self._toggle_ruler)
+
+        # Ruler Data
+        self._ruler_start = None
+        self._ruler_line_item = None
 
         # Grid Data
         self.grid_items = []
@@ -107,7 +117,25 @@ class WorkView(QGraphicsView):
             self.mode_changed.emit("select")
             super().keyPressEvent(event)
 
+    def _toggle_ruler(self):
+        if self._current_mode == "ruler":
+            self._current_mode = "select"
+        else:
+            self._current_mode = "ruler"
+        self.mode_changed.emit(self._current_mode)
+        self._clear_ruler()
+
+
+    def _handle_tile_delete(self):  
+        if self.grid_visible and self.selected_tiles:
+            self._erase_selected_tiles()
+
     def mousePressEvent(self, event):
+
+        # RULER MODE
+        if self._current_mode == "ruler":
+            self._start_ruler(event)
+            return
 
         # CTRL + CLICK -> PAN VIEW
         if event.modifiers() & Qt.ControlModifier:
@@ -149,6 +177,20 @@ class WorkView(QGraphicsView):
 
     def mouseMoveEvent(self, event):
 
+        # RULER MODE - DRAW MEASUREMENT
+        if self._current_mode == "ruler" and self._ruler_start:
+            self._update_ruler(event)
+            return
+
+        # PIXEL AND TILE COORDINATES
+        if self.pixmap_item:
+            scene_pos = self.mapToScene(event.pos())
+            x = int(scene_pos.x())
+            y = int(scene_pos.y())
+            tile_x = x // self.tile_size
+            tile_y = y // self.tile_size
+            self.window().update_coordinates(x, y, tile_x, tile_y)
+
         # CTRL + CLICK -> DRAG PAN
         if self._ctrl_panning:
             self._update_ctrl_drag(event)
@@ -178,6 +220,10 @@ class WorkView(QGraphicsView):
 
 
     def mouseReleaseEvent(self, event):
+
+        if self._current_mode == "ruler":
+            self._end_ruler(event)
+            return
          
         # CTRL + CLICK -> END PAN
         if self._ctrl_panning and event.button() == Qt.LeftButton:
@@ -204,7 +250,34 @@ class WorkView(QGraphicsView):
            
         super().mouseReleaseEvent(event)
 
-    
+
+    # RULER MODE
+    def _start_ruler(self, event):
+        scene_pos = self.mapToScene(event.pos())
+        self._ruler_start = scene_pos
+        #self._clear_ruler()
+
+    def _update_ruler(self, event):
+        scene_pos = self.mapToScene(event.pos())
+        x0, y0 = self._ruler_start.x(), self._ruler_start.y()
+        x1, y1 = scene_pos.x(), scene_pos.y()
+
+        # Linea
+        if self._ruler_line_item:
+            self.scene.removeItem(self._ruler_line_item)
+        self._ruler_line_item = self.scene.addLine(x0, y0, x1, y1, QPen(QColor(180, 0, 0, 160), 0.3, Qt.DotLine))
+        self._ruler_line_item.setZValue(1000)
+
+        # Etichetta
+        dx, dy = abs(x1 - x0), abs(y1 - y0)
+        label = f"Δx: {int(dx)}  Δy: {int(dy)}"
+
+        self.window().update_coordinates(int(x1), int(y1), int(x1)//self.tile_size, int(y1)//self.tile_size, label)
+
+    def _end_ruler(self, event):
+        self._ruler_start = None
+
+
     # CTRL + CLICK -> PAN VIEW
     def _start_ctrl_drag(self, event):
         if not self.pixmap_item:
@@ -294,6 +367,7 @@ class WorkView(QGraphicsView):
                     else:
                         self.selected_tiles.remove(coord)
                         self._remove_tile_marker(coord)
+
             self._save_state()
 
         # PIXEL SELECTION
@@ -711,7 +785,7 @@ class WorkView(QGraphicsView):
         self._draw_started = False
 
    
-    # PIXEL DELETION
+    # PIXEL OR TILES DELETION
     def _start_pixel_delete(self, event):
         self._deleting = True
         self._delete_started = False
@@ -735,6 +809,40 @@ class WorkView(QGraphicsView):
     def _end_pixel_delete(self):
         self._deleting = False
         self._delete_started = False
+
+    def _erase_selected_tiles(self):
+            if not self.pixmap_item:
+                return
+            if not self.selected_tiles:
+                return
+            
+            self._save_state()
+
+            # Cancella pixel selezionati
+            original = self.pixmap_item.pixmap()
+            image = original.toImage()
+            for x, y in self.selected_tiles:
+                px, py = x * self.tile_size, y * self.tile_size
+                for dx in range(self.tile_size):
+                    for dy in range(self.tile_size):
+                        image.setPixelColor(px + dx, py + dy, Qt.transparent)
+            new_pixmap = QPixmap.fromImage(image)
+            self.pixmap_item.setPixmap(new_pixmap)
+
+            # Rimuove i marker visivi (rettangoli arancioni)
+            for tile in list(self.selected_tiles):  # fai una copia per sicurezza
+                self._remove_tile_marker(tile)
+
+            # Svuota selezione logica
+            self.selected_tiles.clear()
+
+            # Rimuove eventuale rettangolo di selezione multipla
+            if getattr(self, "selection_rect_item", None):
+                self.scene().removeItem(self.selection_rect_item)
+                self.selection_rect_item = None
+
+            self.selected_tiles.clear()
+            self._save_state()
 
 
     # COLOR PICKING
@@ -815,13 +923,63 @@ class WorkView(QGraphicsView):
         self.setCursor(Qt.ArrowCursor)
 
     def _save_state(self):
-        print(f"[SAVE_STATE] Pre-save selected_tiles: {self.selected_tiles}")
+        # print(f"[SAVE_STATE] Pre-save selected_tiles: {self.selected_tiles}")
         save_state(
             self.pixmap_item,
             self.selected_pixels if not self.grid_visible else self.selected_tiles,
             self.window().undo_stack,
             self.window().redo_stack
         )
+
+    def export_selection(self):
+        if not self.grid_visible or not self.pixmap_item or not self.selected_tiles:
+            print("[DEBUG] Nessuna griglia visibile o nessuna selezione tile")
+            return
+
+        tile_size = self.tile_size
+        source_pixmap = self.pixmap_item.pixmap()
+        selected_tiles = set(self.selected_tiles)
+
+        # Calcola bounding box
+        min_x = min(x for x, _ in selected_tiles)
+        min_y = min(y for _, y in selected_tiles)
+        max_x = max(x for x, _ in selected_tiles)
+        max_y = max(y for _, y in selected_tiles)
+
+        width = (max_x - min_x + 1) * tile_size
+        height = (max_y - min_y + 1) * tile_size
+
+        final_pixmap = QPixmap(width, height)
+        final_pixmap.fill(Qt.transparent)
+
+        painter = QPainter(final_pixmap)
+        source_image = source_pixmap.toImage()
+
+        for x, y in selected_tiles:
+            src_x = x * tile_size
+            src_y = y * tile_size
+
+            tile_image = QImage(tile_size, tile_size, QImage.Format_ARGB32)
+            tile_image.fill(Qt.transparent)
+
+            for i in range(tile_size):
+                for j in range(tile_size):
+                    px = src_x + i
+                    py = src_y + j
+                    if px < source_image.width() and py < source_image.height():
+                        color = source_image.pixelColor(px, py)
+                        
+                        if not is_checker_color(color):
+                            tile_image.setPixelColor(i, j, color)
+
+            dest_x = (x - min_x) * tile_size
+            dest_y = (y - min_y) * tile_size
+            painter.drawPixmap(dest_x, dest_y, QPixmap.fromImage(tile_image))
+
+        painter.end()
+
+        save_pixmap_dialog(self.window(), QPixmap(final_pixmap))
+
 
     def remove_color(self):
         if not self.pixmap_item:
@@ -844,4 +1002,10 @@ class WorkView(QGraphicsView):
             for item in self.tile_markers.values():
                 self.scene.removeItem(item)
             self.tile_markers.clear()
+
+    def _clear_ruler(self):
+        if self._ruler_line_item:
+            self.scene.removeItem(self._ruler_line_item)
+            self._ruler_line_item = None
+        self._ruler_start = None
 

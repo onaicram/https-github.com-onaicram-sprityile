@@ -7,7 +7,7 @@ class GridBox(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
 
-        self.label = QLabel("Dimensione Tile:")
+        self.label = QLabel("Dim. Tile:")
         
         self.grid_size_field = QSpinBox()
         self.grid_size_field.setRange(1, 256)

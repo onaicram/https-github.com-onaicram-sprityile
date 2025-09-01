@@ -1,4 +1,4 @@
-from PyQt5.QtWidgets import QFileDialog, QGraphicsPixmapItem, QMessageBox, QGraphicsView, QGraphicsScene
+from PyQt5.QtWidgets import QFileDialog, QGraphicsPixmapItem, QMessageBox, QGroupBox, QVBoxLayout, QWidget
 from PyQt5.QtGui import QPixmap, QColor, QPainter, QImage
 from PyQt5.QtCore import QRectF
 from PyQt5.QtCore import Qt
@@ -130,4 +130,31 @@ def create_pixel_preview(pixmap: QPixmap, selected_pixels: set) -> QPixmap:
         image.setPixelColor(x - min_x, y - min_y, color)
 
     return QPixmap.fromImage(image)
+
+def create_section(title: str, content_widget: QWidget) -> QWidget:
+    group_box = QGroupBox(title)
+    group_box.setAlignment(Qt.AlignHCenter)
+    layout = QVBoxLayout(group_box)
+    layout.setContentsMargins(8, 6, 8, 6)
+    layout.setSpacing(6)
+    layout.addWidget(content_widget)
+    group_box.setStyleSheet("""
+        QGroupBox {
+            border: 1px solid gray;
+            border-radius: 4px;
+            margin-top: 4px;
+            background-color: white;
+        }
+        QGroupBox::title {
+            subcontrol-origin: margin;
+            left: 8px;
+            padding: 0 4px;
+            font-weight: bold;
+        }
+    """)
+    return group_box
+
+
+
+
 

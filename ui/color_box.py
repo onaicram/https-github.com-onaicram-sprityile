@@ -21,7 +21,7 @@ class ColorBox(QWidget):
         self.color_preview.clicked.connect(self.choose_color)
 
         self.color_hex = QLineEdit(self.current_color.name().upper())
-        self.color_hex.setFixedWidth(90)
+        self.color_hex.setFixedWidth(70)
         self.color_hex.setReadOnly(True)
 
         top_layout = QHBoxLayout()
